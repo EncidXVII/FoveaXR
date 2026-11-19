@@ -12,7 +12,9 @@ $ErrorActionPreference = "Stop"
 
 $name = "FoveatedVR-$version"
 $dist = Join-Path $root "dist"
-$out = Join-Path $dist $name
+# Staged under build\package, so a copy someone runs from dist (its exe locked) never blocks a rebuild.
+$out = Join-Path $root "build\package\$name"
+New-Item -ItemType Directory -Force $dist | Out-Null
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 New-Item -ItemType Directory -Force "$out\openvr_proxy", "$out\profiles" | Out-Null
 $bin = Join-Path $root "build\Release"
