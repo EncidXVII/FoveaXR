@@ -16,8 +16,9 @@ committed to this repository except the fonts.
   text at the end of this file.
 - **OpenVR SDK** header (ValveSoftware/openvr v2.15.6): its interface declarations are compiled into the OpenVR proxy.
   BSD 3-Clause License, Copyright (c) 2015 Valve Corporation.
-- **Barlow** font (`app/crates/ui/fonts/Barlow-Regular.ttf`, `Barlow-SemiBold.ttf`), Copyright 2017 The Barlow Project
-  Authors. SIL Open Font License 1.1, text in `app/crates/ui/fonts/Barlow-OFL.txt`.
+- **Anton** font (`app/crates/ui/ui/fonts/Anton-Regular.ttf`), Copyright 2020 The Anton Project Authors, and
+  **Barlow** (`Barlow-Regular.ttf`, `Barlow-SemiBold.ttf`), Copyright 2017 The Barlow Project Authors. SIL Open Font
+  License 1.1, texts in `app/crates/ui/ui/fonts/Anton-OFL.txt` and `Barlow-OFL.txt`.
 - **Rust crates** compiled into the tray app: licenses checked by `cargo deny` against the allow list in `deny.toml`;
   the full table is generated for each release.
 

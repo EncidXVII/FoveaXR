@@ -18,17 +18,22 @@ OpenXR layer, settings and logs.
 
 ## Use
 
-- **On / Off**, **Mode** (Fixed, or Eye-tracked where the headset shares eye tracking), **Preset** (Low, Medium, High).
-  Changes apply to running games at once.
-- **Ctrl+F9** in VR (keyboard): foveation off / on, to compare. The app then shows the GPU time saved on eye
-  rendering. **Ctrl+F10**: Off → Fixed → Eye-tracked.
-- **Debug tint** colours the coarse rings (yellow: half rate, red: quarter rate) so you can see where they are.
-- **Export logs** writes `FoveatedVR-logs.zip` to your desktop. Attach it to bug reports.
+- **Foveation**: on / off, **Mode** (Fixed, or Eye-tracked where the headset shares eye tracking), **Preset** (Low,
+  Medium, High), and the GPU time saved in the running game. Changes apply to running games at once.
+- **Games**: your Steam VR games with their status. Search, filter (Enabled, OpenVR, OpenXR, Blocked), sort by name
+  or last played; arrow keys move, Enter runs the row's action, Space opens its explanation, `/` searches.
+- **Settings**: accent theme, **debug tint** (colours the coarse rings: yellow half rate, red quarter rate), and
+  **Export logs** (a zip on your desktop, for bug reports).
+- In VR, on the keyboard: **Ctrl+F9** foveation off / on, to compare (the app then shows the saving), **Ctrl+F10**
+  Off → Fixed → Eye-tracked.
 
 Eye-tracked mode needs the eye tracker to reach the game: OpenXR games through `XR_EXT_eye_gaze_interaction`, OpenVR
 games through SteamVR's eye-tracked foveation centre (SteamVR 2.15+). Without eye data the game falls back to Fixed.
 
 ## Supported
+
+**Windows 10 and 11, x64 only.** Linux and Steam Play (Proton) are planned, not supported: the app does not run
+there, and nothing has been tested inside Proton yet.
 
 | | NVIDIA (Turing / RTX 20 and newer) | AMD (RDNA2 / RX 6000 and newer) | Intel Arc |
 |---|---|---|---|

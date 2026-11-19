@@ -14,19 +14,12 @@ pub struct Tray {
     quit: MenuItem,
 }
 
-/// The accent ring on transparent: the app has no drawn mark yet (comes with the installer's icons).
+/// The FoveaXR mark from the exe's icons (see build.rs) at the tray's size: lime on a dark taskbar, dark ink on a
+/// light one, where lime would be too faint.
 fn icon() -> Result<Icon, String> {
-    const N: u32 = 32;
-    let mut rgba = Vec::with_capacity((N * N * 4) as usize);
-    for y in 0..N {
-        for x in 0..N {
-            let (dx, dy) = (x as f32 - 15.5, y as f32 - 15.5);
-            let r = (dx * dx + dy * dy).sqrt();
-            let on = (9.0..15.0).contains(&r) || r < 4.0;
-            rgba.extend_from_slice(if on { &[0xC6, 0xFF, 0x1A, 0xFF] } else { &[0, 0, 0, 0] });
-        }
-    }
-    Icon::from_rgba(rgba, N, N).map_err(|e| e.to_string())
+    let size = fov_shm::sys::small_icon_px();
+    Icon::from_resource(if fov_shm::sys::light_taskbar() { 3 } else { 2 }, Some((size, size)))
+        .map_err(|e| e.to_string())
 }
 
 impl Tray {

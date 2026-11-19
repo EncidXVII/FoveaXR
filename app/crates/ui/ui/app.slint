@@ -1,0 +1,868 @@
+// The tray app's window: a sidebar and three pages, like the sibling apps' desktop windows.
+import { Tokens, Mode } from "@tokens";
+import "fonts/Anton-Regular.ttf";
+import "fonts/Barlow-Regular.ttf";
+import "fonts/Barlow-SemiBold.ttf";
+import { Badge, Body, Button, Caption, Group, Hit, Icon, Icons, IconTile, Motion, Row, SectionHead, Segmented, Switch, SwitchRow, Title } from "kit.slint";
+
+export { Mode }
+
+// One line of the games list. A header row only names the group below it.
+export struct GameRow {
+    id: int,
+    header: bool,
+    name: string,
+    api: string,
+    badge: string,
+    // Badge kind: 0 on, 1 neutral, 2 blocked, 3 needs attention.
+    badge-kind: int,
+    detail: string,
+    action: string,
+    primary: bool,
+    can-act: bool,
+    busy: bool,
+}
+
+component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <string> icon;
+    in property <bool> on;
+    // Icon only, for a narrow window.
+    in property <bool> compact;
+    callback clicked();
+    accessible-role: tab;
+    accessible-label: root.label;
+    accessible-item-selected: root.on;
+    accessible-action-default => {
+        root.clicked();
+    }
+    height: 44px;
+    border-radius: Tokens.radius-control;
+    background: root.on ? Tokens.raised : hit.pressed ? Tokens.line : hit.has-hover ? Tokens.raised : transparent;
+    animate background {
+        duration: hit.pressed ? 0ms : Motion.fast;
+        easing: ease-out;
+    }
+    HorizontalLayout {
+        padding-left: Tokens.space-3;
+        padding-right: Tokens.space-3;
+        spacing: Tokens.space-3;
+        alignment: root.compact ? center : stretch;
+        VerticalLayout {
+            alignment: center;
+            Icon {
+                d: root.icon;
+                color: root.on ? Tokens.accent : Tokens.ink2;
+            }
+        }
+        if !root.compact: Text {
+            text: root.label;
+            color: root.on ? Tokens.ink : Tokens.ink2;
+            font-size: Tokens.type-body;
+            font-family: Tokens.font-body;
+            font-weight: root.on ? 600 : 400;
+            vertical-alignment: center;
+        }
+    }
+    hit := Hit {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// Page heading with a quiet note on the right.
+component Head inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> note;
+    spacing: Tokens.space-3;
+    padding-bottom: Tokens.space-2;
+    Title {
+        text: root.title;
+    }
+    Caption {
+        text: root.note;
+        horizontal-stretch: 1;
+        horizontal-alignment: right;
+        overflow: elide;
+    }
+}
+
+component FoveationPage inherits VerticalLayout {
+    in-out property <bool> enabled;
+    in-out property <int> mode;
+    in-out property <int> preset;
+    in property <float> saved-ms;
+    in property <float> saved-pct;
+    in property <bool> saved-valid;
+    in property <string> status;
+    callback changed();
+    spacing: Tokens.space-3;
+    alignment: start;
+    Head {
+        title: "FOVEATION";
+        note: "Ctrl+F9 in VR: compare on / off";
+    }
+    // The master switch: the whole card toggles it.
+    power := Rectangle {
+        height: 88px;
+        border-radius: Tokens.radius-group;
+        background: hit.pressed ? Tokens.pressed : hit.has-hover ? Tokens.line : Tokens.raised;
+        animate background {
+            duration: hit.pressed ? 0ms : Motion.fast;
+            easing: ease-out;
+        }
+        accessible-role: switch;
+        accessible-label: "Foveated rendering";
+        accessible-checked: root.enabled;
+        accessible-action-default => {
+            hit.clicked();
+        }
+        HorizontalLayout {
+            padding-left: Tokens.space-6;
+            padding-right: Tokens.space-6;
+            spacing: Tokens.space-4;
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                Text {
+                    text: root.enabled ? "ON" : "OFF";
+                    font-size: Tokens.type-heading;
+                    font-family: Tokens.font-display;
+                    color: root.enabled ? Tokens.accent : Tokens.ink;
+                    animate color {
+                        duration: Motion.fast;
+                        easing: ease-out;
+                    }
+                }
+                Caption {
+                    text: root.enabled ? "Every supported game renders the edges of your view at a lower rate" : "Paused: games render as usual";
+                    overflow: elide;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                Switch {
+                    on: root.enabled;
+                    hover: hit.has-hover;
+                }
+            }
+        }
+        hit := Hit {
+            clicked => {
+                root.enabled = !root.enabled;
+                root.changed();
+            }
+        }
+    }
+    SectionHead {
+        text: "Mode";
+    }
+    Segmented {
+        label: "Mode";
+        options: ["Fixed", "Eye-tracked"];
+        selected: root.mode;
+        picked(i) => {
+            root.mode = i;
+            root.changed();
+        }
+    }
+    Caption {
+        text: root.mode == 0 ? "Full detail in the middle of each eye. Works on every headset."
+            : "Full detail where you look, smaller rings. Needs eye tracking shared with games; falls back to Fixed.";
+        wrap: word-wrap;
+    }
+    SectionHead {
+        text: "Preset";
+    }
+    Segmented {
+        label: "Preset";
+        options: ["Low", "Medium", "High"];
+        selected: root.preset;
+        picked(i) => {
+            root.preset = i;
+            root.changed();
+        }
+    }
+    SectionHead {
+        text: "GPU saved";
+    }
+    card := Rectangle {
+        min-height: 96px;
+        border-radius: Tokens.radius-group;
+        background: Tokens.raised;
+        // The number counts to each new reading, so a change is seen rather than missed.
+        property <float> shown: root.saved-ms;
+        animate shown {
+            duration: Motion.fill;
+            easing: cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        HorizontalLayout {
+            padding: Tokens.space-5;
+            spacing: Tokens.space-4;
+            if root.saved-valid: HorizontalLayout {
+                spacing: Tokens.space-2;
+                alignment: start;
+                Text {
+                    text: round(card.shown * 100) / 100;
+                    font-size: Tokens.type-display * 0.6;
+                    font-family: Tokens.font-display;
+                    color: Tokens.accent;
+                    vertical-alignment: center;
+                }
+                Caption {
+                    text: "ms per frame\n" + round(root.saved-pct) + "% of eye rendering";
+                    color: Tokens.ink2;
+                }
+            }
+            Caption {
+                text: root.status;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+                color: root.saved-valid ? Tokens.ink3 : Tokens.ink2;
+            }
+        }
+    }
+}
+
+component GameLine inherits Rectangle {
+    in property <GameRow> game;
+    in property <bool> selected;
+    in property <bool> expanded;
+    callback act();
+    callback toggle();
+    property <length> compact: 56px;
+    // Opens to show why a game is in the state it is; eases open and shut from wherever it is.
+    property <length> h: root.game.header ? 36px : root.expanded ? root.compact + details.preferred-height : root.compact;
+    animate h {
+        duration: Motion.slow;
+        easing: cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    height: self.h;
+    clip: true;
+    border-radius: Tokens.radius-control;
+    background: root.game.header ? transparent : root.selected ? Tokens.line : hit.has-hover ? Tokens.raised : transparent;
+    border-width: root.selected && !root.game.header ? 1px : 0px;
+    border-color: Tokens.edge;
+    animate background {
+        duration: Motion.fast;
+        easing: ease-out;
+    }
+    if root.game.header: Caption {
+        x: Tokens.space-2;
+        y: parent.height - self.height - Tokens.space-1;
+        text: root.game.name;
+    }
+    hit := Hit {
+        enabled: !root.game.header;
+        clicked => {
+            root.toggle();
+        }
+    }
+    if !root.game.header: HorizontalLayout {
+        y: 0;
+        height: root.compact;
+        padding-left: Tokens.space-2;
+        padding-right: Tokens.space-2;
+        spacing: Tokens.space-3;
+        VerticalLayout {
+            alignment: center;
+            IconTile {
+                icon: Icons.games;
+                tint: root.game.badge-kind == 0 ? Tokens.accent : root.game.badge-kind == 2 ? Tokens.danger : Tokens.ink2;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Body {
+                text: root.game.name;
+                overflow: elide;
+            }
+            Caption {
+                text: root.game.api;
+                overflow: elide;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            Badge {
+                text: root.game.badge;
+                kind: root.game.badge-kind;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            // One action per row. A game we must not touch gets "Why?", which opens the explanation instead.
+            Button {
+                text: root.game.action;
+                kind: root.game.primary ? 1 : 0;
+                busy: root.game.busy;
+                clicked => {
+                    if root.game.can-act {
+                        root.act();
+                    } else {
+                        root.toggle();
+                    }
+                }
+            }
+        }
+    }
+    details := Caption {
+        y: root.compact;
+        x: 36px + Tokens.space-5;
+        width: parent.width - self.x - Tokens.space-3;
+        text: root.game.detail;
+        wrap: word-wrap;
+        vertical-alignment: top;
+        visible: !root.game.header;
+        opacity: root.expanded ? 1 : 0;
+        animate opacity {
+            duration: Motion.fade;
+            easing: ease-out;
+        }
+    }
+}
+
+component GamesPage inherits FocusScope {
+    in property <[GameRow]> games;
+    // 0 looking, 1 no Steam, 2 no VR games, 3 a list.
+    in property <int> state;
+    in property <string> note;
+    in-out property <string> search;
+    in-out property <int> filter;
+    in-out property <int> sort;
+    in-out property <int> selected: -1;
+    in-out property <int> expanded: -1;
+    callback search-edited(string);
+    callback filter-picked(int);
+    callback sort-picked(int);
+    callback act(int);
+
+    function move(step: int) {
+        let n = root.games.length;
+        let first = root.selected + step;
+        // Skip group headers.
+        let i = first >= 0 && first < n && root.games[first].header ? first + step : first;
+        if i >= 0 && i < n {
+            root.selected = i;
+            // Into view: rows are 56 px, headers 36, plus the open row's details.
+            let top = i * 56px + 8px;
+            if top < list.content-y * -1 {
+                list.content-y = -top;
+            } else if top + 56px > list.height - list.content-y {
+                list.content-y = list.height - top - 56px;
+            }
+        }
+    }
+
+    key-pressed(event) => {
+        if event.text == Key.DownArrow {
+            root.move(1);
+            return accept;
+        }
+        if event.text == Key.UpArrow {
+            root.move(-1);
+            return accept;
+        }
+        if event.text == Key.Return && root.selected >= 0 && root.selected < root.games.length {
+            if root.games[root.selected].can-act {
+                root.act(root.games[root.selected].id);
+            }
+            return accept;
+        }
+        if event.text == " " && root.selected >= 0 {
+            root.expanded = root.expanded == root.selected ? -1 : root.selected;
+            return accept;
+        }
+        if event.text == "/" || (event.modifiers.control && event.text == "f") {
+            field.focus();
+            return accept;
+        }
+        if event.text == Key.Escape && root.search != "" {
+            root.search = "";
+            root.search-edited("");
+            return accept;
+        }
+        reject
+    }
+
+    VerticalLayout {
+        spacing: Tokens.space-3;
+        Head {
+            title: "GAMES";
+            note: root.note;
+        }
+        HorizontalLayout {
+            spacing: Tokens.space-2;
+            // Search: filters as you type. "/" or Ctrl+F from anywhere on the page.
+            Rectangle {
+                height: 40px;
+                horizontal-stretch: 1;
+                border-radius: Tokens.radius-control;
+                background: Tokens.raised;
+                border-width: field.has-focus ? 2px : 0px;
+                border-color: Tokens.accent;
+                HorizontalLayout {
+                    padding-left: Tokens.space-3;
+                    padding-right: Tokens.space-2;
+                    spacing: Tokens.space-2;
+                    VerticalLayout {
+                        alignment: center;
+                        Icon {
+                            d: Icons.search;
+                            width: 16px;
+                            height: 16px;
+                            color: Tokens.ink2;
+                        }
+                    }
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        field := TextInput {
+                            width: parent.width;
+                            height: parent.height;
+                            text <=> root.search;
+                            color: Tokens.ink;
+                            font-size: Tokens.type-body;
+                            font-family: Tokens.font-body;
+                            vertical-alignment: center;
+                            single-line: true;
+                            accessible-role: text-input;
+                            accessible-label: "Search games";
+                            edited => {
+                                root.selected = -1;
+                                root.search-edited(self.text);
+                            }
+                            key-pressed(event) => {
+                                if event.text == Key.DownArrow || event.text == Key.Return {
+                                    root.focus();
+                                    root.move(1);
+                                    return accept;
+                                }
+                                reject
+                            }
+                        }
+                        Caption {
+                            x: 0;
+                            text: "Search games";
+                            color: Tokens.ink3;
+                            visible: root.search == "";
+                        }
+                    }
+                    if root.search != "": Rectangle {
+                        width: 28px;
+                        height: 28px;
+                        y: (parent.height - self.height) / 2;
+                        border-radius: Tokens.radius-small;
+                        background: clear.has-hover ? Tokens.line : transparent;
+                        accessible-role: button;
+                        accessible-label: "Clear search";
+                        Icon {
+                            d: Icons.close;
+                            width: 14px;
+                            height: 14px;
+                            color: Tokens.ink2;
+                        }
+                        clear := Hit {
+                            clicked => {
+                                root.search = "";
+                                root.search-edited("");
+                            }
+                        }
+                    }
+                }
+            }
+            Button {
+                icon: Icons.sort;
+                text: root.sort == 0 ? "Name" : "Last played";
+                clicked => {
+                    root.sort-picked(root.sort == 0 ? 1 : 0);
+                }
+            }
+        }
+        Segmented {
+            label: "Show";
+            options: ["All", "Enabled", "OpenVR", "OpenXR", "Blocked"];
+            selected: root.filter;
+            picked(i) => {
+                root.selected = -1;
+                root.filter-picked(i);
+            }
+        }
+        Rectangle {
+            vertical-stretch: 1;
+            min-height: 160px;
+            list := Flickable {
+                content-height: column.preferred-height;
+                column := VerticalLayout {
+                    alignment: start;
+                    padding-top: Tokens.space-2;
+                    spacing: 0;
+                    for game[i] in root.games: GameLine {
+                        game: game;
+                        selected: i == root.selected;
+                        expanded: i == root.expanded;
+                        toggle => {
+                            root.selected = i;
+                            root.expanded = root.expanded == i ? -1 : i;
+                            root.focus();
+                        }
+                        act => {
+                            root.selected = i;
+                            root.act(game.id);
+                        }
+                    }
+                }
+            }
+            if list.content-height > list.height + 1px: Rectangle {
+                x: parent.width - 4px;
+                width: 4px;
+                border-radius: 2px;
+                background: Tokens.edge;
+                height: max(32px, list.height * list.height / list.content-height);
+                y: (list.height - self.height) * (-list.content-y) / (list.content-height - list.height);
+            }
+            // Empty states: say why the list is empty and what to do about it.
+            if root.state != 3 || root.games.length == 0: VerticalLayout {
+                alignment: center;
+                spacing: Tokens.space-3;
+                padding: Tokens.space-6;
+                Body {
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                    text: root.state == 0 ? "Looking for VR games…"
+                        : root.state == 1 ? "Steam isn't installed for this Windows user."
+                        : root.state == 2 ? "No VR games in your Steam libraries."
+                        : root.search != "" ? "No games match \"" + root.search + "\"." : "No games in this view.";
+                }
+                Caption {
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                    text: root.state == 1 ? "Games from other stores still get foveated if they use OpenXR."
+                        : root.state == 2 ? "Install a VR game and reopen FoveatedVR. OpenXR games are foveated without being listed."
+                        : root.state == 3 ? "Try another filter or a shorter search." : "";
+                }
+                if root.state == 3 && (root.search != "" || root.filter != 0): HorizontalLayout {
+                    alignment: center;
+                    Button {
+                        text: "Show all games";
+                        clicked => {
+                            root.search = "";
+                            root.filter = 0;
+                            root.filter-picked(0);
+                            root.search-edited("");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+component SettingsPage inherits VerticalLayout {
+    in-out property <bool> tint;
+    in property <string> version;
+    in property <bool> exporting;
+    callback changed();
+    callback theme-picked(int);
+    callback export-logs();
+    spacing: Tokens.space-3;
+    alignment: start;
+    Head {
+        title: "SETTINGS";
+        note: "Saved as you change them";
+    }
+    Group {
+        Row {
+            label: "Theme";
+            sub: Tokens.theme-names[Mode.theme];
+            HorizontalLayout {
+                spacing: 4px;
+                alignment: end;
+                for c[i] in Tokens.themes: Rectangle {
+                    property <bool> chosen: i == Mode.theme;
+                    width: 24px;
+                    height: self.width;
+                    y: (parent.height - self.height) / 2;
+                    border-radius: self.width / 2;
+                    border-width: self.chosen || h.has-hover ? 2px : 0px;
+                    border-color: self.chosen ? Tokens.ink : Tokens.dim;
+                    accessible-role: button;
+                    accessible-label: Tokens.theme-names[i];
+                    accessible-item-selected: self.chosen;
+                    Rectangle {
+                        width: 16px;
+                        height: 16px;
+                        border-radius: 8px;
+                        background: c;
+                    }
+                    h := Hit {
+                        clicked => {
+                            root.theme-picked(i);
+                        }
+                    }
+                }
+            }
+        }
+        SwitchRow {
+            divider: true;
+            label: "Show the rings in VR";
+            sub: "Debug tint: yellow half rate, red quarter rate";
+            on: root.tint;
+            clicked => {
+                root.tint = !root.tint;
+                root.changed();
+            }
+        }
+        Row {
+            divider: true;
+            label: "Hotkeys in VR";
+            sub: "Ctrl+F9 compare on / off · Ctrl+F10 Off, Fixed, Eye-tracked";
+        }
+        Row {
+            divider: true;
+            label: "Logs";
+            sub: "A zip on your desktop, for bug reports";
+            VerticalLayout {
+                alignment: center;
+                Button {
+                    text: "Export logs";
+                    icon: Icons.down;
+                    busy: root.exporting;
+                    clicked => {
+                        root.export-logs();
+                    }
+                }
+            }
+        }
+    }
+    Caption {
+        text: "FoveatedVR " + root.version + " · GPL-3.0 · no telemetry, no network";
+        color: Tokens.ink3;
+    }
+}
+
+export component MainWindow inherits Window {
+    in-out property <int> tab;
+    // Below this the sidebar shows icons only.
+    out property <bool> narrow: self.width < 720px;
+    in-out property <bool> enabled: true;
+    in-out property <int> mode;
+    in-out property <int> preset: 1;
+    in-out property <bool> tint;
+    in property <float> saved-ms;
+    in property <float> saved-pct;
+    in property <bool> saved-valid;
+    in property <string> status: "No game running";
+    in property <[GameRow]> games;
+    in property <int> games-state;
+    in property <string> games-note;
+    in-out property <string> search;
+    in-out property <int> filter;
+    in-out property <int> sort;
+    in property <string> version;
+    in property <bool> exporting;
+    // A new message pops the toast; the same text twice still shows twice (the count changes).
+    in property <string> toast;
+    in property <int> toast-count;
+    callback changed();
+    callback export-logs();
+    callback theme-picked(int);
+    callback search-edited(string);
+    callback filter-picked(int);
+    callback sort-picked(int);
+    callback game-action(int);
+
+    title: "FoveatedVR";
+    icon: @image-url("../../../../packaging/brand/foveaxr-256.png");
+    preferred-width: 880px;
+    preferred-height: 640px;
+    min-width: 560px;
+    min-height: 500px;
+    background: Tokens.bg;
+    default-font-family: Tokens.font-body;
+
+    // Positioned and sized from the window, so the layout never feeds back into narrow.
+    HorizontalLayout {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        Rectangle {
+            width: root.narrow ? 68px : 200px;
+            background: Tokens.surface;
+            // Positioned, so the sidebar never sizes the window (narrow is computed from the window width).
+            VerticalLayout {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                padding-top: Tokens.space-5;
+                padding-bottom: Tokens.space-5;
+                padding-left: Tokens.space-3;
+                padding-right: Tokens.space-3;
+                spacing: Tokens.space-1;
+                HorizontalLayout {
+                    padding-left: root.narrow ? 0 : Tokens.space-3;
+                    padding-top: Tokens.space-1;
+                    padding-bottom: Tokens.space-5;
+                    spacing: Tokens.space-2;
+                    alignment: root.narrow ? center : start;
+                    // The mark in the theme's accent, as tall as the wordmark's capitals.
+                    Image {
+                        source: @image-url("../../../../packaging/brand/foveaxr-mark-white.png");
+                        colorize: Tokens.accent;
+                        width: Tokens.type-brand * 1.15;
+                        height: self.width;
+                        y: (parent.height - self.height) / 2;
+                    }
+                    if !root.narrow: Text {
+                        vertical-alignment: center;
+                        text: "FOVEATEDVR";
+                        color: Tokens.ink;
+                        font-size: Tokens.type-brand;
+                        font-family: Tokens.font-display;
+                    }
+                }
+                for t[i] in [
+                    { label: "Foveation", icon: Icons.foveation },
+                    { label: "Games", icon: Icons.games },
+                    { label: "Settings", icon: Icons.setup },
+                ]: NavItem {
+                    label: t.label;
+                    icon: t.icon;
+                    compact: root.narrow;
+                    on: i == root.tab;
+                    clicked => {
+                        root.tab = i;
+                        flick.content-y = 0;
+                        if i == 1 {
+                            games.focus();
+                        }
+                    }
+                }
+                Rectangle {
+                    vertical-stretch: 1;
+                }
+            }
+        }
+        // Pages fill the window when it is tall enough and scroll when it is not (the games list scrolls itself).
+        Rectangle {
+            horizontal-stretch: 1;
+            flick := Flickable {
+                content-width: self.width;
+                content-height: root.tab == 1 ? self.height : max(self.height, page.preferred-height);
+                page := VerticalLayout {
+                    width: flick.width;
+                    height: flick.content-height;
+                    padding-top: 28px;
+                    padding-bottom: 28px;
+                    padding-left: root.narrow ? 20px : 36px;
+                    padding-right: root.narrow ? 20px : 36px;
+                    if root.tab == 0: FoveationPage {
+                        enabled <=> root.enabled;
+                        mode <=> root.mode;
+                        preset <=> root.preset;
+                        saved-ms: root.saved-ms;
+                        saved-pct: root.saved-pct;
+                        saved-valid: root.saved-valid;
+                        status: root.status;
+                        changed => {
+                            root.changed();
+                        }
+                    }
+                    games := GamesPage {
+                        visible: root.tab == 1;
+                        height: root.tab == 1 ? self.preferred-height : 0;
+                        games: root.games;
+                        state: root.games-state;
+                        note: root.games-note;
+                        search <=> root.search;
+                        filter <=> root.filter;
+                        sort <=> root.sort;
+                        search-edited(t) => {
+                            root.search-edited(t);
+                        }
+                        filter-picked(i) => {
+                            root.filter-picked(i);
+                        }
+                        sort-picked(i) => {
+                            root.sort-picked(i);
+                        }
+                        act(id) => {
+                            root.game-action(id);
+                        }
+                    }
+                    if root.tab == 2: SettingsPage {
+                        tint <=> root.tint;
+                        version: root.version;
+                        exporting: root.exporting;
+                        changed => {
+                            root.changed();
+                        }
+                        theme-picked(i) => {
+                            root.theme-picked(i);
+                        }
+                        export-logs => {
+                            root.export-logs();
+                        }
+                    }
+                }
+            }
+            if root.tab != 1 && flick.content-height > flick.height + 1px: Rectangle {
+                x: parent.width - 8px;
+                width: 4px;
+                border-radius: 2px;
+                background: Tokens.edge;
+                height: max(32px, flick.height * flick.height / flick.content-height);
+                y: (flick.height - self.height) * (-flick.content-y) / (flick.content-height - flick.height);
+            }
+            // Toast: rises from the bottom edge and goes back the way it came; fades only, under reduced motion.
+            toast-box := Rectangle {
+                property <bool> shown;
+                width: min(parent.width - 48px, msg.preferred-width + 2 * Tokens.space-5);
+                height: 44px;
+                x: (parent.width - self.width) / 2;
+                y: self.shown ? parent.height - self.height - Tokens.space-6 : parent.height + (Mode.reduce-motion ? -self.height - Tokens.space-6 : 8px);
+                opacity: self.shown ? 1 : 0;
+                animate y {
+                    duration: Motion.slow;
+                    easing: cubic-bezier(0.23, 1, 0.32, 1);
+                }
+                animate opacity {
+                    duration: Tokens.motion-fade;
+                    easing: ease-out;
+                }
+                border-radius: Tokens.radius-control;
+                background: Tokens.ink;
+                accessible-role: text;
+                accessible-label: root.toast;
+                msg := Text {
+                    text: root.toast;
+                    color: Tokens.on-accent;
+                    font-size: Tokens.type-body;
+                    font-family: Tokens.font-body;
+                    overflow: elide;
+                    width: parent.width - 2 * Tokens.space-5;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                hide := Timer {
+                    interval: 3500ms;
+                    running: false;
+                    triggered => {
+                        toast-box.shown = false;
+                        self.running = false;
+                    }
+                }
+            }
+        }
+    }
+
+    changed toast-count => {
+        toast-box.shown = true;
+        // Restart the countdown: a second toast gets its full time.
+        hide.running = false;
+        hide.running = true;
+    }
+}

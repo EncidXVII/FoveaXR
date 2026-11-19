@@ -166,7 +166,9 @@ pub struct Shm {
 #[cfg(windows)]
 mod mapping;
 #[cfg(windows)]
-pub use mapping::{Mapping, alive};
+pub mod sys;
+#[cfg(windows)]
+pub use mapping::Mapping;
 
 #[cfg(test)]
 mod tests {

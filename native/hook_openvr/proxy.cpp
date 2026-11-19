@@ -24,7 +24,7 @@ namespace {
 constexpr const char* kNames[] = {FOV_OPENVR_EXPORTS(FOV_NAME)};
 #undef FOV_NAME
 constexpr size_t kCount = sizeof(kNames) / sizeof(kNames[0]);
-constexpr size_t kGetGenericInterface = 5;  // index in exports.h
+constexpr size_t kGetGenericInterface = 5, kShutdown = 17;  // indices in exports.h
 
 // What a stub lands on when the original lacks that export (an older openvr_api) or is missing: 0 / null / false
 // for every return type the API uses.
@@ -223,6 +223,14 @@ void wrap(const char* name, void* iface) {
     }
 }
 
+// A game that shuts OpenVR down and starts it again gets new interfaces: ours are fetched again too.
+using Shutdown = void(VR_CALLTYPE*)();
+Shutdown g_shutdown = nullptr;
+void VR_CALLTYPE shutdown() {
+    g_system = nullptr;
+    g_shutdown();
+}
+
 void* VR_CALLTYPE get_interface(const char* name, vr::EVRInitError* err) {
     void* iface = g_get_interface(name, err);
     if (iface && name) wrap(name, iface);
@@ -247,6 +255,8 @@ extern "C" void* fov_proxy_resolve(uint64_t index) {
         g_get_interface = reinterpret_cast<GetInterface>(fov_proxy_targets[kGetGenericInterface]);
         if (g_get_interface != reinterpret_cast<void*>(&missing_export))
             fov_proxy_targets[kGetGenericInterface] = reinterpret_cast<void*>(&get_interface);
+        g_shutdown = reinterpret_cast<Shutdown>(fov_proxy_targets[kShutdown]);
+        fov_proxy_targets[kShutdown] = reinterpret_cast<void*>(&shutdown);
     });
     return index < kCount ? fov_proxy_targets[index] : reinterpret_cast<void*>(&missing_export);
 }

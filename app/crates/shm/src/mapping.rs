@@ -4,11 +4,10 @@
 use std::ptr::{addr_of_mut, read_volatile, write_volatile};
 use std::sync::atomic::{AtomicU32, Ordering, fence};
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
 use windows::Win32::System::Memory::{
     CreateFileMappingW, FILE_MAP_ALL_ACCESS, MEMORY_MAPPED_VIEW_ADDRESS, MapViewOfFile, PAGE_READWRITE, UnmapViewOfFile,
 };
-use windows::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject};
 use windows::core::{HSTRING, PCWSTR};
 
 use crate::{MAGIC, NAME, Settings, Shm, Stats, VERSION, preset};
@@ -87,17 +86,6 @@ impl Mapping {
             }
         }
         out
-    }
-}
-
-/// Whether a process is still running (a game's slot outlives it until another game reuses it).
-pub fn alive(pid: u32) -> bool {
-    // SAFETY: plain Win32 calls on a handle closed before returning.
-    unsafe {
-        let Ok(h) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) else { return false };
-        let running = WaitForSingleObject(h, 0) == WAIT_TIMEOUT;
-        let _ = CloseHandle(h);
-        running
     }
 }
 

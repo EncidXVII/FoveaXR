@@ -13,8 +13,11 @@ publish = false
 fov-shm = { path = "app/crates/shm" }
 fov-ui = { path = "app/crates/ui" }
 slint = { version = "1.19", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software"] }
+slint-build = "1.19"
+serde_json = "1"
+png = "0.18"
 tray-icon = "0.26"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Memory", "Win32_System_Performance", "Win32_System_Threading"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Memory", "Win32_System_Performance", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

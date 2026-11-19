@@ -12,6 +12,8 @@ pub enum Block {
 pub struct Game {
     pub app_id: u32,
     pub name: String,
+    /// Unix time Steam last started it, 0 if never.
+    pub last_played: u64,
     /// 64-bit openvr_api.dll files (the proxy is 64-bit only).
     pub openvr: Vec<PathBuf>,
     pub openxr: bool,
@@ -74,16 +76,7 @@ fn kv(line: &str, key: &str) -> Option<String> {
 }
 
 fn steam_root() -> Option<PathBuf> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let out = std::process::Command::new("reg")
-        .args(["query", r"HKCU\Software\Valve\Steam", "/v", "SteamPath"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .ok()?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    let line = text.lines().find(|l| l.contains("SteamPath"))?;
-    Some(PathBuf::from(line.split("REG_SZ").nth(1)?.trim()))
+    fov_shm::sys::steam_path().map(PathBuf::from)
 }
 
 fn libraries(root: &Path) -> Vec<PathBuf> {
@@ -139,7 +132,8 @@ fn inspect(dir: &Path, game: &mut Game) {
                 }
             } else if name == "openvr_api.dll" && is_x64(&p) {
                 game.openvr.push(p);
-            } else if name == "openxr_loader.dll" {
+            } else if name == "openxr_loader.dll" && !d.to_string_lossy().to_lowercase().contains("bepinex") {
+                // A loader under BepInEx belongs to a mod that brings VR to a flat game, not to the game.
                 game.openxr = true;
             } else if depth <= 1 && name.ends_with(".exe") && !name.contains("crash") && !name.starts_with("unins") {
                 game.exes.push(name);
@@ -148,10 +142,16 @@ fn inspect(dir: &Path, game: &mut Game) {
     }
 }
 
+pub enum Scan {
+    NoSteam,
+    Games(Vec<Game>),
+}
+
 /// Installed games with a VR runtime DLL, sorted by name. Slow (walks game folders): call off the UI thread.
-pub fn scan(profiles: &Profiles) -> Vec<Game> {
-    const SKIP: [u32; 3] = [250_820, 228_980, 1_009_850]; // SteamVR, Steamworks redistributables, SteamVR beta tools
-    let Some(root) = steam_root() else { return vec![] };
+pub fn scan(profiles: &Profiles) -> Scan {
+    // Not games: SteamVR, Steamworks redistributables, and overlay tools that ship openvr_api.dll.
+    const SKIP: [u32; 4] = [250_820, 228_980, 1_009_850, 1_173_510];
+    let Some(root) = steam_root() else { return Scan::NoSteam };
     let mut games = Vec::new();
     for lib in libraries(&root) {
         let apps = lib.join("steamapps");
@@ -171,7 +171,8 @@ pub fn scan(profiles: &Profiles) -> Vec<Game> {
                 continue;
             }
             let dir = apps.join("common").join(install);
-            let mut game = Game { app_id, name, openvr: vec![], openxr: false, exes: vec![], block: None };
+            let last_played = field("LastPlayed").and_then(|v| v.parse().ok()).unwrap_or(0);
+            let mut game = Game { app_id, name, last_played, openvr: vec![], openxr: false, exes: vec![], block: None };
             inspect(&dir, &mut game);
             if game.openvr.is_empty() && !game.openxr {
                 continue;
@@ -187,7 +188,7 @@ pub fn scan(profiles: &Profiles) -> Vec<Game> {
         }
     }
     games.sort_by_key(|g| g.name.to_lowercase());
-    games
+    Scan::Games(games)
 }
 
 #[cfg(test)]
@@ -207,6 +208,7 @@ mod tests {
         let game = |id, exe: &str| Game {
             app_id: id,
             name: String::new(),
+            last_played: 0,
             openvr: vec![],
             openxr: true,
             exes: vec![exe.into()],

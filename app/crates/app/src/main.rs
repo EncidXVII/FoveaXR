@@ -1,6 +1,8 @@
 // No console window when started from the Start menu or autostart.
 #![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
 
+#[cfg(windows)]
+mod games;
 mod openvr;
 mod settings;
 #[cfg(windows)]
@@ -24,7 +26,11 @@ fn main() -> ExitCode {
         };
     }
     #[cfg(windows)]
-    let result = ui::run();
+    let result = {
+        // A second copy would fight the first over settings and the tray; the first one stays.
+        let Some(_instance) = fov_shm::sys::single_instance() else { return ExitCode::SUCCESS };
+        ui::run()
+    };
     #[cfg(not(windows))]
     let result: Result<(), String> = Err("FoveatedVR runs on Windows only.".into());
     match result {
@@ -36,29 +42,8 @@ fn main() -> ExitCode {
     }
 }
 
-/// The running game's line on the main view, from the stats games publish: (process alive, stats) pairs.
-fn status(slots: &[(bool, fov_shm::Stats)]) -> String {
-    let Some(s) = slots.iter().filter(|(alive, _)| *alive).map(|(_, s)| s).max_by_key(|s| s.frames) else {
-        return "No game running".into();
-    };
-    let exe = s.exe();
-    if let Some(why) = s.inactive_reason() {
-        return format!("{exe}: not foveated, {why}");
-    }
-    if s.eye_ms_on > 0.0 && s.eye_ms_off > 0.0 {
-        let saved = s.eye_ms_off - s.eye_ms_on;
-        return format!(
-            "{exe}: GPU saved {saved:.2} ms per frame ({:.0}% of eye rendering)",
-            100.0 * saved / s.eye_ms_off
-        );
-    }
-    format!("{exe}: foveated. Press Ctrl+F9 in VR to measure the saving")
-}
-
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod tests {
-    use super::*;
-
     fn stats(exe: &str, frames: u64, reason: u32, on: f32, off: f32) -> fov_shm::Stats {
         let mut s = fov_shm::Stats {
             exe: [0; 64],
@@ -85,14 +70,18 @@ mod tests {
     }
 
     #[test]
-    fn status_line() {
-        assert_eq!(status(&[]), "No game running");
-        assert_eq!(status(&[(false, stats("old.exe", 9, 0, 1.0, 2.0))]), "No game running");
+    fn readout_for_the_running_game() {
+        use crate::ui::readout;
+        assert!(!readout(&[]).valid);
+        assert!(readout(&[(false, stats("old.exe", 9, 0, 1.0, 2.0))]).text.starts_with("No game running"));
+        let r = readout(&[(true, stats("game.exe", 5, 0, 1.0, 2.0)), (true, stats("idle.exe", 1, 0, 0.0, 0.0))]);
+        assert!(r.valid && (r.ms - 1.0).abs() < 1e-6 && (r.pct - 50.0).abs() < 1e-4 && r.text == "game.exe");
+        assert!(readout(&[(true, stats("game.exe", 5, 0, 0.0, 0.0))]).text.contains("Ctrl+F9"));
         assert_eq!(
-            status(&[(true, stats("game.exe", 5, 0, 1.0, 2.0))]),
-            "game.exe: GPU saved 1.00 ms per frame (50% of eye rendering)"
+            readout(&[(true, stats("ac.exe", 5, 4, 0.0, 0.0))]).text,
+            "ac.exe: not foveated, blocked: anti-cheat."
         );
-        assert!(status(&[(true, stats("game.exe", 5, 0, 0.0, 0.0))]).contains("Ctrl+F9"));
-        assert_eq!(status(&[(true, stats("ac.exe", 5, 4, 0.0, 0.0))]), "ac.exe: not foveated, blocked: anti-cheat");
+        let gpu = readout(&[(true, stats("old.exe", 5, 7, 0.0, 0.0))]);
+        assert!(!gpu.valid && gpu.text.contains("no variable rate shading"));
     }
 }

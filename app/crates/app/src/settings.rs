@@ -11,6 +11,8 @@ pub struct AppSettings {
     pub debug_tint: bool,
     /// Lowercase exe names of OpenXR games turned off.
     pub off_games: Vec<String>,
+    /// Accent theme (index into design-tokens.json themes); the app's own, games ignore it.
+    pub theme: u32,
 }
 
 impl Default for AppSettings {
@@ -21,6 +23,7 @@ impl Default for AppSettings {
             preset: fov_shm::preset::MEDIUM,
             debug_tint: false,
             off_games: vec![],
+            theme: 0,
         }
     }
 }
@@ -57,6 +60,7 @@ impl AppSettings {
                     }
                 }
                 "debug_tint" => s.debug_tint = value.trim() == "true",
+                "theme" => s.theme = value.trim().parse().unwrap_or(0),
                 "off_games" => {
                     s.off_games =
                         value.split('"').skip(1).step_by(2).map(str::to_lowercase).filter(|g| !g.is_empty()).collect();
@@ -75,11 +79,12 @@ impl AppSettings {
         };
         let games: Vec<String> = self.off_games.iter().map(|g| format!("\"{g}\"")).collect();
         format!(
-            "# FoveatedVR settings, written by the app.\nenabled = {}\nmode = \"{}\"\npreset = \"{preset}\"\ndebug_tint = {}\noff_games = [{}]\n",
+            "# FoveatedVR settings, written by the app.\nenabled = {}\nmode = \"{}\"\npreset = \"{preset}\"\ndebug_tint = {}\noff_games = [{}]\ntheme = {}\n",
             self.enabled,
             if self.eye_tracked { "eye" } else { "fixed" },
             self.debug_tint,
-            games.join(", ")
+            games.join(", "),
+            self.theme
         )
     }
 
@@ -117,6 +122,7 @@ mod tests {
             preset: fov_shm::preset::HIGH,
             debug_tint: true,
             off_games: vec!["game.exe".into(), "other.exe".into()],
+            theme: 3,
         };
         assert_eq!(AppSettings::parse(&s.render()), s);
         assert_eq!(AppSettings::parse(""), AppSettings::default());

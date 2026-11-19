@@ -1,6 +1,6 @@
 [package]
 name = "fov-shm"
-description = "Shared memory between the tray app and the in-game core (mirror of native/include/fov_shm.h)"
+description = "Shared memory with the in-game core (mirror of native/include/fov_shm.h) and the app's few Windows calls"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
