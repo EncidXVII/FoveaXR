@@ -20,30 +20,38 @@ fn app_dir() -> PathBuf {
     std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf)).unwrap_or_default()
 }
 
-/// The proxy beside the app (installed), or in the native build (development).
-fn proxy_dll() -> PathBuf {
+/// A file shipped beside the app (installed), or in the native build (development).
+fn shipped(rel: &str) -> PathBuf {
     let dir = app_dir();
-    let installed = dir.join("openvr_proxy").join("openvr_api.dll");
-    if installed.exists() { installed } else { dir.join("../../build/Release/openvr_proxy/openvr_api.dll") }
+    let installed = dir.join(rel);
+    if installed.exists() { installed } else { dir.join("../../build/Release").join(rel) }
 }
 
-/// Logs, settings and installs as one zip on the desktop (Windows' own tar writes zips), shown in Explorer.
+fn proxy_dll() -> PathBuf {
+    shipped("openvr_proxy/openvr_api.dll")
+}
+
+/// The OpenXR layer manifest as Wine sees it, for Proton prefixes.
+pub fn layer_manifest() -> String {
+    crate::platform::wine_path(&shipped("fov_openxr_layer.json"))
+}
+
+/// Logs, settings and installs as one zip on the desktop (tar writes zips on Windows and Linux), then shown.
 fn export_logs() -> Result<PathBuf, String> {
-    use std::os::windows::process::CommandExt;
-    const NO_WINDOW: u32 = 0x0800_0000;
-    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).ok_or("no LOCALAPPDATA")?.join("FoveatedVR");
-    let profile = std::env::var_os("USERPROFILE").map(PathBuf::from).ok_or("no USERPROFILE")?;
-    // A desktop moved by OneDrive or policy may not be under the profile: then the profile folder itself.
-    let desktop = Some(profile.join("Desktop")).filter(|d| d.is_dir()).unwrap_or(profile);
-    let out = desktop.join("FoveatedVR-logs.zip");
-    let settings = crate::settings::dir().filter(|d| d.exists());
-    if !local.join("logs").exists() && settings.is_none() {
+    let logs = crate::platform::state_dir().map(|d| d.join("logs")).filter(|d| d.exists());
+    let settings = crate::platform::config_dir().filter(|d| d.exists());
+    if logs.is_none() && settings.is_none() {
         return Err("no logs yet: start a VR game first".into());
     }
+    // Windows' tar writes zips; GNU tar does not, so Linux gets a gzipped tar.
+    let name = if cfg!(windows) { "FoveatedVR-logs.zip" } else { "FoveatedVR-logs.tar.gz" };
+    let out = crate::platform::desktop_dir().ok_or("no home folder")?.join(name);
     let mut cmd = std::process::Command::new("tar");
-    cmd.arg("-a").arg("-c").arg("-f").arg(&out).creation_flags(NO_WINDOW);
-    if local.join("logs").exists() {
-        cmd.arg("-C").arg(&local).arg("logs");
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::creation_flags(&mut cmd, 0x0800_0000); // no console window
+    cmd.arg(if cfg!(windows) { "-a" } else { "-z" }).arg("-c").arg("-f").arg(&out);
+    if let Some(dir) = &logs {
+        cmd.arg("-C").arg(dir.parent().unwrap_or(dir)).arg("logs");
     }
     if let Some(dir) = settings {
         cmd.arg("-C").arg(dir).arg(".");
@@ -51,7 +59,7 @@ fn export_logs() -> Result<PathBuf, String> {
     if !cmd.status().map_err(|e| e.to_string())?.success() {
         return Err("the zip could not be written".into());
     }
-    let _ = std::process::Command::new("explorer").arg(format!("/select,{}", out.display())).spawn();
+    crate::platform::reveal(&out);
     Ok(out)
 }
 
@@ -98,6 +106,14 @@ struct App {
     toasts: i32,
 }
 
+/// A game's OpenVR install state, and on Linux the OpenXR layer state in its Proton prefix.
+fn states(game: &steam::Game) -> (State, Option<State>) {
+    let vr = openvr::state(&game.openvr, &openvr::load());
+    let xr = (cfg!(unix) && game.openvr.is_empty())
+        .then(|| crate::proton::state(&game.prefix, &layer_manifest(), &crate::proton::load()));
+    (vr, xr)
+}
+
 fn now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
@@ -136,7 +152,7 @@ pub fn run() -> Result<(), String> {
     let shm = fov_shm::Mapping::open()?;
     shm.write_settings(&settings.to_shm());
     let ui = fov_ui::MainWindow::new().map_err(|e| e.to_string())?;
-    ui.global::<fov_ui::Mode>().set_reduce_motion(!fov_shm::sys::animations_enabled());
+    ui.global::<fov_ui::Mode>().set_reduce_motion(!crate::platform::animations_enabled());
     ui.global::<fov_ui::Mode>().set_theme(i32::try_from(settings.theme).unwrap_or(0));
     ui.set_enabled(settings.enabled);
     ui.set_mode(i32::from(settings.eye_tracked));
@@ -247,7 +263,21 @@ pub fn run() -> Result<(), String> {
             let settings = a.settings.clone();
             let Some(e) = a.entries.get_mut(id).filter(|e| !e.busy && e.game.block.is_none()) else { return };
             let name = e.game.name.clone();
-            if e.game.openvr.is_empty() {
+            if let (true, Some(xr)) = (e.game.openvr.is_empty(), e.xr) {
+                // Linux OpenXR: the layer goes into the game's Proton prefix, off the UI thread.
+                e.busy = true;
+                let pfx = e.game.prefix.clone();
+                let tx = tx.clone();
+                std::thread::spawn(move || {
+                    let result = if xr == State::On {
+                        crate::proton::disable(&pfx, &layer_manifest()).map(|()| format!("{name}: disabled"))
+                    } else {
+                        crate::proton::enable(&pfx, &layer_manifest(), now())
+                            .map(|()| format!("{name}: enabled. Start the game to use it"))
+                    };
+                    let _ = tx.send(Done::Action { id, result: result.map_err(|e| format!("{name}: {e}")) });
+                });
+            } else if e.game.openvr.is_empty() {
                 // OpenXR: a per-game switch in the settings, no files touched.
                 let exes = e.game.exes.clone();
                 let off = exes.iter().any(|x| settings.off_games.contains(x));
@@ -292,13 +322,22 @@ pub fn run() -> Result<(), String> {
         }
     });
 
-    let tray = tray::Tray::new()?;
+    // No tray (a Linux desktop without a StatusNotifier host): the window is the app, and closing it quits.
+    let tray = tray::Tray::new().inspect_err(|e| eprintln!("no tray icon: {e}")).ok();
+    if tray.is_none() {
+        ui.window().on_close_requested(|| {
+            let _ = slint::quit_event_loop();
+            slint::CloseRequestResponse::HideWindow
+        });
+    }
+    // A game counts as running while its frame count moves (its process id is a Wine id on Linux, not checkable).
+    let mut beats: std::collections::HashMap<(u32, String), (u64, std::time::Instant)> = Default::default();
     let timer = slint::Timer::default();
     timer.start(slint::TimerMode::Repeated, Duration::from_millis(250), {
         let (ui, app, rows) = (ui.as_weak(), Rc::clone(&app), Rc::clone(&rows));
         move || {
             let Some(ui) = ui.upgrade() else { return };
-            match tray.poll() {
+            match tray.as_ref().and_then(tray::Tray::poll) {
                 Some(tray::Command::Open) => {
                     let _ = ui.show();
                 }
@@ -312,21 +351,19 @@ pub fn run() -> Result<(), String> {
                 match done {
                     Done::Scan(Scan::NoSteam) => a.state = 1,
                     Done::Scan(Scan::Games(found)) => {
-                        let records = openvr::load();
                         a.state = if found.is_empty() { 2 } else { 3 };
                         a.entries = found
                             .into_iter()
                             .map(|game| {
-                                let vr = openvr::state(&game.openvr, &records);
-                                Entry { game, vr, busy: false }
+                                let (vr, xr) = states(&game);
+                                Entry { game, vr, xr, busy: false }
                             })
                             .collect();
                     }
                     Done::Action { id, result } => {
-                        let records = openvr::load();
                         if let Some(e) = a.entries.get_mut(id) {
                             e.busy = false;
-                            e.vr = openvr::state(&e.game.openvr, &records);
+                            (e.vr, e.xr) = states(&e.game);
                         }
                         let msg = result.unwrap_or_else(|e| {
                             // A running game holds its DLL open.
@@ -347,7 +384,19 @@ pub fn run() -> Result<(), String> {
                 }
                 show_rows(&ui, &a, &rows);
             }
-            let slots: Vec<_> = a.shm.stats().into_iter().map(|(pid, s)| (fov_shm::sys::alive(pid), s)).collect();
+            let now = std::time::Instant::now();
+            let slots: Vec<_> = a
+                .shm
+                .stats()
+                .into_iter()
+                .map(|(pid, s)| {
+                    let beat = beats.entry((pid, s.exe())).or_insert((s.frames, now));
+                    if beat.0 != s.frames {
+                        *beat = (s.frames, now);
+                    }
+                    (now.duration_since(beat.1) < Duration::from_secs(3) && s.frames > 0, s)
+                })
+                .collect();
             let r = readout(&slots);
             ui.set_status(r.text.into());
             ui.set_saved_ms(r.ms);

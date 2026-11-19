@@ -1,50 +1,12 @@
 //! The few Windows calls the app needs beyond the mapping; kept here, the one crate that may use unsafe.
 #![allow(unsafe_code)]
 
-use windows::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, WAIT_TIMEOUT};
 use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RRF_RT_REG_SZ, RegGetValueW};
-use windows::Win32::System::Threading::{CreateMutexW, OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetSystemMetrics, SM_CXSMICON, SPI_GETCLIENTAREAANIMATION, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
     SystemParametersInfoW,
 };
 use windows::core::{HSTRING, PCWSTR, w};
-
-/// Whether a process is still running (a game's slot outlives it until another game reuses it).
-pub fn alive(pid: u32) -> bool {
-    // SAFETY: plain Win32 calls on a handle closed before returning.
-    unsafe {
-        let Ok(h) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) else { return false };
-        let running = WaitForSingleObject(h, 0) == WAIT_TIMEOUT;
-        let _ = CloseHandle(h);
-        running
-    }
-}
-
-/// Held for the app's lifetime; a second copy would fight the first over settings and the tray.
-pub struct Instance(HANDLE);
-
-impl Drop for Instance {
-    fn drop(&mut self) {
-        // SAFETY: the handle came from CreateMutexW and is closed once.
-        unsafe {
-            let _ = CloseHandle(self.0);
-        }
-    }
-}
-
-/// None when another copy of the app already runs in this session.
-pub fn single_instance() -> Option<Instance> {
-    // SAFETY: plain Win32 call; the error code is read right after it.
-    unsafe {
-        let h = CreateMutexW(None, false, w!("Local\\FoveatedVR.app")).ok()?;
-        if GetLastError() == ERROR_ALREADY_EXISTS {
-            let _ = CloseHandle(h);
-            return None;
-        }
-        Some(Instance(h))
-    }
-}
 
 /// Windows' "Animation effects" (Settings > Accessibility > Visual effects). Off keeps every state change and
 /// drops the movement. On when the query fails: the setting is unknown, not off.

@@ -12,11 +12,15 @@ path = "src/main.rs"
 
 [dependencies]
 fov-shm.workspace = true
-
-[target.'cfg(windows)'.dependencies]
 fov-ui.workspace = true
 slint.workspace = true
+
+[target.'cfg(windows)'.dependencies]
 tray-icon.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+ksni = { version = "0.3", features = ["blocking"] }
+png.workspace = true
 
 [lints]
 workspace = true

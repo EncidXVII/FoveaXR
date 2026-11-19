@@ -64,10 +64,8 @@ std::string read_text(const std::wstring& path) {
 }
 
 std::wstring appdata_file(const wchar_t* name) {
-    std::wstring dir(GetEnvironmentVariableW(L"APPDATA", nullptr, 0), L'\0');
-    if (dir.empty()) return L"";
-    dir.resize(GetEnvironmentVariableW(L"APPDATA", dir.data(), (DWORD)dir.size()));
-    return dir + L"\\FoveatedVR\\" + name;
+    std::wstring dir = host_dir(Host::Config);
+    return dir.empty() ? dir : dir + L"\\" + name;
 }
 
 }  // namespace fov

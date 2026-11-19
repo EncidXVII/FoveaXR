@@ -17,8 +17,10 @@ pub struct Install {
 pub enum State {
     Off,
     On,
-    /// The game was updated and its new openvr_api.dll replaced ours.
+    /// The game was updated and its new openvr_api.dll replaced ours (Proton: the prefix lost our layer).
     NeedsReenable,
+    /// Cannot be enabled yet: a Proton game without a Wine prefix (never started).
+    Unavailable,
 }
 
 /// FNV-1a: tells our proxy and the game's original apart and notices a replaced file; not a security measure.

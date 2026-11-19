@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -15,8 +16,9 @@ import shm  # noqa: E402
 PROBE = os.path.join(os.path.dirname(__file__), "..", "..", "build", "Release", "fov_probe.exe")
 
 
-def probe():
-    return json.loads(subprocess.run([PROBE, "--gaze"], capture_output=True, text=True, check=True).stdout)
+def probe(env=None):
+    out = subprocess.run([PROBE, "--gaze"], capture_output=True, text=True, check=True, env=env).stdout
+    return json.loads(out)
 
 
 class Layout(unittest.TestCase):
@@ -72,6 +74,27 @@ class TestSource(unittest.TestCase):
         ctypes.windll.kernel32.QueryPerformanceFrequency(ctypes.byref(freq))
         self.writer.write((0.5, 0.5), (0.5, 0.5), stamp=shm.qpc() - freq.value // 5)  # 200 ms old
         self.assertEqual(probe()["status"], "stale")
+
+
+@unittest.skipUnless(os.path.exists(PROBE), "native build missing")
+class FileBacked(unittest.TestCase):
+    r"""The Linux / Proton arrangement: the app maps a file (/dev/shm/FoveatedVR.v1), the core inside Wine maps the
+    same file (Z:\dev\shm\...). Here both sides map one temp file: Python as the app, fov_probe as the core."""
+
+    def test_round_trip_through_a_file(self):
+        path = os.path.join(tempfile.mkdtemp(), "FoveatedVR.v1")
+        writer = shm.Writer(path)
+        try:
+            writer.write((0.1, 0.2), (0.3, 0.4))
+            got = probe(dict(os.environ, FOV_SHM_FILE=path))
+            self.assertEqual(got["status"], "valid")
+            self.assertAlmostEqual(got["left"][1], 0.2, places=5)
+            self.assertEqual(os.path.getsize(path), ctypes.sizeof(shm.Shm))
+            self.assertEqual(writer.shm.magic, shm.MAGIC)  # the core filled the header in the file
+            # Not the named section: that one never saw this gaze.
+            self.assertNotEqual(probe()["left"][1], 0.2)
+        finally:
+            writer.close()
 
 
 if __name__ == "__main__":

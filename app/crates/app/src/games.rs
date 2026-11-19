@@ -9,6 +9,8 @@ pub struct Entry {
     pub game: Game,
     /// The OpenVR install state (Off for OpenXR-only games), read when the list loads and after each action.
     pub vr: State,
+    /// Linux: the OpenXR layer in the game's Proton prefix. None on Windows, where one layer covers every game.
+    pub xr: Option<State>,
     pub busy: bool,
 }
 
@@ -52,12 +54,16 @@ pub struct Row {
 /// Whether foveation will run in this game when it starts.
 pub fn foveated(e: &Entry, s: &AppSettings) -> bool {
     e.game.block.is_none()
-        && if e.game.openvr.is_empty() {
-            !e.game.exes.iter().any(|x| s.off_games.contains(x))
-        } else {
-            e.vr == State::On
+        && match (e.game.openvr.is_empty(), e.xr) {
+            (false, _) => e.vr == State::On,
+            (true, Some(xr)) => xr == State::On,
+            (true, None) => !e.game.exes.iter().any(|x| s.off_games.contains(x)),
         }
 }
+
+/// What every Linux row adds: vkd3d-proton turns D3D12 VRS into Vulkan's; dxvk-nvapi has no D3D11 VRS.
+const LINUX_D3D11: &str =
+    "On Linux, D3D12 games are foveated; D3D11 games are not available (Proton has no D3D11 variable rate shading).";
 
 fn played(last: u64, now: u64) -> String {
     if last == 0 {
@@ -107,7 +113,8 @@ fn row(id: usize, e: &Entry, s: &AppSettings, now: u64) -> Row {
                 false,
                 true,
             ),
-            State::Off => (
+            // An OpenVR game folder is always there: never unavailable.
+            State::Off | State::Unavailable => (
                 "Off",
                 1,
                 "OpenVR games need FoveatedVR placed in their folder once. Close the game, then Enable.",
@@ -122,6 +129,43 @@ fn row(id: usize, e: &Entry, s: &AppSettings, now: u64) -> Row {
                 "Re-enable",
                 true,
                 true,
+            ),
+        },
+        // Linux: OpenXR is per game, in the game's Proton prefix.
+        None if e.xr.is_some() => match e.xr.unwrap_or(State::Off) {
+            State::On => (
+                "On",
+                0,
+                "Our OpenXR layer is registered in this game's Proton prefix. Disable or uninstall takes it out \
+                 again. Changes apply from the game's next start.",
+                "Disable",
+                false,
+                true,
+            ),
+            State::Off => (
+                "Off",
+                1,
+                "Proton games read their own Windows registry: Enable registers our OpenXR layer in this game's \
+                 prefix. Close the game first.",
+                "Enable",
+                true,
+                true,
+            ),
+            State::NeedsReenable => (
+                "Reset",
+                3,
+                "The game's Proton prefix no longer has our layer (it was reset or recreated). Enable again.",
+                "Re-enable",
+                true,
+                true,
+            ),
+            State::Unavailable => (
+                "Not started",
+                1,
+                "Start the game once with Proton, so it has a Wine prefix, then enable it here.",
+                "Why?",
+                false,
+                false,
             ),
         },
         None if !foveated(e, s) => (
@@ -149,7 +193,7 @@ fn row(id: usize, e: &Entry, s: &AppSettings, now: u64) -> Row {
         api: format!("{api}{}", played(g.last_played, now)),
         badge: badge.into(),
         badge_kind: kind,
-        detail: detail.into(),
+        detail: if cfg!(unix) && g.block.is_none() { format!("{detail} {LINUX_D3D11}") } else { detail.into() },
         action: action.into(),
         primary,
         can_act,
@@ -233,8 +277,10 @@ mod tests {
                 openxr: !openvr,
                 exes: vec![format!("{}.exe", name.to_lowercase())],
                 block,
+                prefix: PathBuf::new(),
             },
             vr,
+            xr: None,
             busy: false,
         }
     }
@@ -289,5 +335,18 @@ mod tests {
         let r = rows(&list(), &s, "", Filter::All, false, 0);
         assert_eq!(r.iter().find(|x| x.name == "Mid").map(|x| x.action.clone()), Some("Turn on".into()));
         assert_eq!(note(&list(), &s), "5 games · 1 foveated");
+    }
+
+    #[test]
+    fn proton_openxr_is_per_game() {
+        let s = AppSettings::default();
+        let mut games = list();
+        games[2].xr = Some(State::Off);
+        let mid = |g: &[Entry]| rows(g, &s, "mid", Filter::All, false, 0).into_iter().next();
+        assert_eq!(mid(&games).map(|r| (r.badge, r.action)), Some(("Off".into(), "Enable".into())));
+        games[2].xr = Some(State::Unavailable);
+        assert_eq!(mid(&games).map(|r| (r.badge, r.can_act)), Some(("Not started".into(), false)));
+        games[2].xr = Some(State::On);
+        assert!(foveated(&games[2], &s));
     }
 }

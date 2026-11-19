@@ -10,6 +10,9 @@ extern "C" {
 
 const char* fov_version(void);
 
+/* 1 inside Wine/Proton (ntdll exports wine_get_version), where the app runs natively on Linux. */
+int fov_is_wine(void);
+
 /* One line per state change, never per frame. Goes to FOV_LOG_FILE if set (tests), else
  * %LOCALAPPDATA%\FoveatedVR\logs\<exe>-<yyyymmdd>.log; a file past 1 MB is moved to .old. */
 void fov_log(const char* fmt, ...);

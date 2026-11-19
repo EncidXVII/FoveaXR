@@ -4,7 +4,7 @@ target_compile_options(fov_warnings INTERFACE $<$<COMPILE_LANGUAGE:CXX>:/W4 /WX 
 target_compile_definitions(fov_warnings INTERFACE WIN32_LEAN_AND_MEAN NOMINMAX)
 
 add_library(fov_core STATIC core/log.cpp core/shm.cpp core/settings.cpp core/rings.cpp core/safety.cpp
-    core/core.cpp core/hook.cpp)
+    core/core.cpp core/hook.cpp core/host.cpp)
 target_include_directories(fov_core PUBLIC include)
 target_compile_definitions(fov_core PRIVATE FOV_VERSION="${PROJECT_VERSION}")
 target_link_libraries(fov_core PRIVATE fov_minhook fov_warnings)

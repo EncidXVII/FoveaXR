@@ -1,23 +1,22 @@
 // No console window when started from the Start menu or autostart.
 #![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
 
-#[cfg(windows)]
 mod games;
 mod openvr;
+mod platform;
+mod proton;
 mod settings;
-#[cfg(windows)]
 mod steam;
-#[cfg(windows)]
 mod tray;
-#[cfg(windows)]
 mod ui;
 
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    // The uninstaller: every game's openvr_api.dll back as it was.
+    // The uninstaller: every game's openvr_api.dll back as it was, and on Linux every Proton prefix's registry.
     if std::env::args().any(|a| a == "--uninstall") {
-        return match openvr::disable_all() {
+        let proton = || if cfg!(unix) { proton::disable_all(&ui::layer_manifest()) } else { Ok(()) };
+        return match openvr::disable_all().and_then(|()| proton()) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");
@@ -25,15 +24,9 @@ fn main() -> ExitCode {
             }
         };
     }
-    #[cfg(windows)]
-    let result = {
-        // A second copy would fight the first over settings and the tray; the first one stays.
-        let Some(_instance) = fov_shm::sys::single_instance() else { return ExitCode::SUCCESS };
-        ui::run()
-    };
-    #[cfg(not(windows))]
-    let result: Result<(), String> = Err("FoveatedVR runs on Windows only.".into());
-    match result {
+    // A second copy would fight the first over settings and the tray; the first one stays.
+    let Some(_instance) = platform::single_instance() else { return ExitCode::SUCCESS };
+    match ui::run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("{e}");
@@ -42,7 +35,7 @@ fn main() -> ExitCode {
     }
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 mod tests {
     fn stats(exe: &str, frames: u64, reason: u32, on: f32, off: f32) -> fov_shm::Stats {
         let mut s = fov_shm::Stats {

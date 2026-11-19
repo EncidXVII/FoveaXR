@@ -202,8 +202,11 @@ bool install(ID3D11Device* device) {
     if (g_device) return g_device == device;
     Caps caps = query(device);
     if (!caps.supported) {
-        core.disable(FOV_REASON_UNSUPPORTED_GPU, caps.nvapi ? "D3D11: this NVIDIA GPU has no variable rate shading"
-                                                            : "D3D11: foveation needs an NVIDIA GPU (NVAPI)");
+        // Under Proton, NVAPI is dxvk-nvapi, which has no D3D11 variable rate shading (it reports it unsupported).
+        core.disable(FOV_REASON_UNSUPPORTED_GPU,
+                     fov_is_wine() ? "D3D11 games: not available on Linux (Proton has no D3D11 variable rate shading)"
+                     : caps.nvapi  ? "D3D11: this NVIDIA GPU has no variable rate shading"
+                                   : "D3D11: foveation needs an NVIDIA GPU (NVAPI)");
         return false;
     }
     g_device = device;

@@ -20,6 +20,8 @@ pub struct Game {
     /// Lowercase exe names in the game's top two folder levels.
     pub exes: Vec<String>,
     pub block: Option<Block>,
+    /// The Proton prefix (steamapps/compatdata/<appid>/pfx); Linux only, it may not exist yet.
+    pub prefix: PathBuf,
 }
 
 /// Exe names and app ids of a profile list (`exe = "..."`, `steam_app_id = N`).
@@ -73,10 +75,6 @@ fn kv(line: &str, key: &str) -> Option<String> {
     let rest = line.trim().strip_prefix(&format!("\"{key}\""))?;
     let v = rest.trim().strip_prefix('"')?.strip_suffix('"')?;
     Some(v.replace("\\\\", "\\"))
-}
-
-fn steam_root() -> Option<PathBuf> {
-    fov_shm::sys::steam_path().map(PathBuf::from)
 }
 
 fn libraries(root: &Path) -> Vec<PathBuf> {
@@ -151,9 +149,19 @@ pub enum Scan {
 pub fn scan(profiles: &Profiles) -> Scan {
     // Not games: SteamVR, Steamworks redistributables, and overlay tools that ship openvr_api.dll.
     const SKIP: [u32; 4] = [250_820, 228_980, 1_009_850, 1_173_510];
-    let Some(root) = steam_root() else { return Scan::NoSteam };
+    let roots = crate::platform::steam_roots();
+    if roots.is_empty() {
+        return Scan::NoSteam;
+    }
+    let mut libs: Vec<PathBuf> = Vec::new();
+    for lib in roots.iter().flat_map(|r| libraries(r)) {
+        let lib = lib.canonicalize().unwrap_or(lib);
+        if !libs.contains(&lib) {
+            libs.push(lib);
+        }
+    }
     let mut games = Vec::new();
-    for lib in libraries(&root) {
+    for lib in libs {
         let apps = lib.join("steamapps");
         let Ok(entries) = std::fs::read_dir(&apps) else { continue };
         for e in entries.flatten() {
@@ -172,7 +180,9 @@ pub fn scan(profiles: &Profiles) -> Scan {
             }
             let dir = apps.join("common").join(install);
             let last_played = field("LastPlayed").and_then(|v| v.parse().ok()).unwrap_or(0);
-            let mut game = Game { app_id, name, last_played, openvr: vec![], openxr: false, exes: vec![], block: None };
+            let prefix = apps.join("compatdata").join(id.as_str()).join("pfx");
+            let mut game =
+                Game { app_id, name, last_played, openvr: vec![], openxr: false, exes: vec![], block: None, prefix };
             inspect(&dir, &mut game);
             if game.openvr.is_empty() && !game.openxr {
                 continue;
@@ -213,6 +223,7 @@ mod tests {
             openxr: true,
             exes: vec![exe.into()],
             block: None,
+            prefix: PathBuf::new(),
         };
         assert!(l.has(&game(438_100, "x.exe")));
         assert!(l.has(&game(1, "vrchat.exe")));

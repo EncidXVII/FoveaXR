@@ -40,9 +40,14 @@ uint32_t safety_reason(const std::string& exe_lower, uint32_t app_id, const std:
                        const std::string& anticheat_list, const std::string& native_list);
 // settings.toml: the keys the app writes. Unknown keys are ignored here (the app owns the file).
 void apply_settings_toml(const std::string& text, FovSettings& s, std::vector<std::string>* off_games);
-// Whole file as text, "" if missing; %APPDATA%\FoveatedVR\<name>.
+// Whole file as text, "" if missing; a file in the app's settings folder.
 std::string read_text(const std::wstring& path);
 std::wstring appdata_file(const wchar_t* name);
+
+// The app's folders: settings, logs, the install. Windows AppData, or the Linux XDG folders through Z: inside
+// Wine/Proton (the app runs natively there).
+enum class Host { Config, State, Install };
+std::wstring host_dir(Host kind);
 
 // Inline hook on a function (taken from a vtable); the detour reaches the original through *original.
 bool hook(void* target, void* detour, void** original);

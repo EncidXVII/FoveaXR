@@ -26,14 +26,10 @@ std::wstring module_dir() {
     return s.substr(0, s.find_last_of(L"\\/"));
 }
 
-// Profiles beside the DLL (installed layer), else in the default install folder (the OpenVR proxy lives in a game).
+// Profiles beside the DLL (installed layer), else in the install folder (the OpenVR proxy lives in a game).
 std::string profile(const wchar_t* name) {
     std::string text = read_text(module_dir() + L"\\profiles\\" + name);
-    if (text.empty()) {
-        wchar_t local[MAX_PATH];
-        if (GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH))
-            text = read_text(std::wstring(local) + L"\\Programs\\FoveatedVR\\profiles\\" + name);
-    }
+    if (text.empty()) text = read_text(host_dir(Host::Install) + L"\\profiles\\" + name);
     return text;
 }
 

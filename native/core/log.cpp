@@ -1,6 +1,8 @@
 #include "fov_core.h"
 #include <windows.h>
 #include <cstdarg>
+#include <filesystem>
+#include "fov_frame.h"
 #include <cstdio>
 #include <mutex>
 #include <share.h>
@@ -26,12 +28,11 @@ std::wstring env(const wchar_t* name) {
 FILE* open_log() {
     std::wstring path = env(L"FOV_LOG_FILE");
     if (path.empty()) {
-        std::wstring dir = env(L"LOCALAPPDATA");
+        std::wstring dir = fov::host_dir(fov::Host::State);
         if (dir.empty()) return nullptr;
-        dir += L"\\FoveatedVR";
-        CreateDirectoryW(dir.c_str(), nullptr);
         dir += L"\\logs";
-        CreateDirectoryW(dir.c_str(), nullptr);
+        std::error_code ignored;
+        std::filesystem::create_directories(dir, ignored);
         SYSTEMTIME t;
         GetLocalTime(&t);
         wchar_t date[16];

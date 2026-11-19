@@ -163,12 +163,10 @@ pub struct Shm {
     pub slots: [Slot; SLOTS],
 }
 
-#[cfg(windows)]
 mod mapping;
 #[cfg(windows)]
 pub mod sys;
-#[cfg(windows)]
-pub use mapping::Mapping;
+pub use mapping::{Mapping, file_path};
 
 #[cfg(test)]
 mod tests {

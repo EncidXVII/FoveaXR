@@ -7,7 +7,7 @@ The edge of each eye's view is shaded more coarsely than the centre, where you l
 frame. On the test scene (a pixel-heavy fixture) eye rendering took 1.37 ms without and 0.25 ms with the High preset.
 Real games save less: how much depends on how much of their frame is pixel shading. Measure your own with Ctrl+F9.
 
-## Install
+## Install (Windows)
 
 1. Download `FoveatedVR-1.0.0.zip` from Releases, check it against `FoveatedVR-1.0.0.zip.sha256`, unzip.
 2. Run `Install.cmd`. No admin rights: it installs for your Windows user only and starts the app (tray icon).
@@ -15,6 +15,23 @@ Real games save less: how much depends on how much of their frame is pixel shadi
 
 Uninstall: Start menu → **Uninstall FoveatedVR**. It puts every game's original `openvr_api.dll` back and removes the
 OpenXR layer, settings and logs.
+
+## Install (Linux, experimental)
+
+For SteamVR on Linux with games running under Proton. **Experimental: built and unit tested, not yet tested in a
+headset or with a real game.**
+
+1. Download `FoveatedVR-1.0.0-linux-x86_64.tar.gz`, check it against its `.sha256`, unpack.
+2. Run `./install.sh`: per user, no root (`~/.local/share/foveatedvr`, a menu entry). The tray icon needs a
+   StatusNotifier host: KDE has one, GNOME needs the AppIndicator extension; without it the window is the app.
+3. In the **Games** tab, **Enable** each game, with the game closed. OpenVR games get the `openvr_api.dll` swap as on
+   Windows; OpenXR games get our layer registered in their own Proton prefix (start a game once first so it has one).
+
+Uninstall: `~/.local/share/foveatedvr/uninstall.sh` (every game and prefix put back, then the app removed).
+
+What is expected to work under Proton, from the translation layers' public source: **D3D12 games** (vkd3d-proton
+turns D3D12 VRS Tier 2 into Vulkan fragment shading rate; needs a Vulkan driver that has it). **D3D11 games are not
+available**: Proton's NVAPI (dxvk-nvapi) has no D3D11 variable rate shading, and the app says so for those games.
 
 ## Use
 
@@ -32,14 +49,16 @@ games through SteamVR's eye-tracked foveation centre (SteamVR 2.15+). Without ey
 
 ## Supported
 
-**Windows 10 and 11, x64 only.** Linux and Steam Play (Proton) are planned, not supported: the app does not run
-there, and nothing has been tested inside Proton yet.
+**Windows 10 and 11, x64.** **Linux x86_64 with Proton: experimental** (see above): D3D12 games only, untested in a
+headset.
 
 | | NVIDIA (Turing / RTX 20 and newer) | AMD (RDNA2 / RX 6000 and newer) | Intel Arc |
 |---|---|---|---|
 | D3D11 | Yes | No | No |
 | D3D12 | Yes | Yes | Yes |
 | Vulkan, OpenGL | No | No | No |
+| Linux / Proton: D3D12 | Expected (driver with fragment shading rate) | Expected | Expected |
+| Linux / Proton: D3D11 | No | No | No |
 
 VR APIs: OpenXR (API layer, all OpenXR games on any runtime) and OpenVR (per-game, after **Enable**).
 
@@ -58,7 +77,10 @@ VR APIs: OpenXR (API layer, all OpenXR games on any runtime) and OpenVR (per-gam
 
 ## Build
 
-Windows 11 x64, Visual Studio 2022+ (C++ and MASM), CMake 3.24+, Rust stable, Python 3.13 (harness).
+Windows 11 x64, Visual Studio 2022+ (C++ and MASM), CMake 3.24+, Rust stable, Python 3.13 (harness). The DLLs
+games load are Windows code on both platforms, built on Windows. On Linux only the app builds
+(`cargo build --release -p fov-app`, needs `libfontconfig1-dev` and `libxkbcommon-dev`);
+`installer/linux/package.sh` puts it together with the Windows DLLs into the Linux tarball.
 
 ```bash
 cmake -S . -B build

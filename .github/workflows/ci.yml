@@ -28,3 +28,33 @@ jobs:
           python-version: "3.13"
       # Layout of the shared memory and the test gaze source end to end (no GPU or SteamVR needed).
       - run: python -m unittest discover -s harness/tests -v
+      # The DLLs games load, for the Linux tarball (Proton runs them).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-dlls
+          path: |
+            build/Release/fov_openxr_layer.dll
+            build/Release/fov_openxr_layer.json
+            build/Release/openvr_proxy/openvr_api.dll
+  linux:
+    runs-on: ubuntu-latest
+    needs: native
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libxkbcommon-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo build --release -p fov-app
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-dlls
+          path: windows-dlls
+      - run: sh installer/linux/package.sh target/release/FoveatedVR windows-dlls
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-tarball
+          path: dist/*.tar.gz*

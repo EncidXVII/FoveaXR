@@ -5,6 +5,7 @@ check too.
 """
 import ctypes
 import mmap
+import os
 
 NAME = "Local\\FoveatedVR.v1"
 MAGIC = 0x31564F46
@@ -72,8 +73,17 @@ class Writer:
     """Holds the mapping open (it lives while any process holds it) and writes with the seqlock protocol. Gaze only,
     unless settings are given: then this run's settings replace the app's (tests only)."""
 
-    def __init__(self):
-        self._map = mmap.mmap(-1, ctypes.sizeof(Shm), tagname=NAME)
+    def __init__(self, path=None):
+        """path: a file to map instead of the named section, as the Linux app maps /dev/shm/FoveatedVR.v1 (the core
+        maps the same file through Wine's Z: drive, or the file FOV_SHM_FILE names)."""
+        size = ctypes.sizeof(Shm)
+        if path:
+            with open(path, "a+b") as f:
+                if os.path.getsize(path) < size:
+                    f.truncate(size)
+                self._map = mmap.mmap(f.fileno(), size)
+        else:
+            self._map = mmap.mmap(-1, size, tagname=NAME)
         self.shm = Shm.from_buffer(self._map)
 
     def settings(self, mode=MODE_EYE, preset="medium", tint=False):

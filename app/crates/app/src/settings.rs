@@ -1,5 +1,6 @@
-//! %APPDATA%\FoveatedVR\settings.toml: what the user chose, saved on every change. The in-game core reads the same
-//! file when it starts before the app (and for the per-game off list); live changes reach games through shared memory.
+//! settings.toml in the config folder (%APPDATA%\FoveatedVR, or $XDG_CONFIG_HOME/foveatedvr): what the user chose,
+//! saved on every change. The in-game core reads the same file when it starts before the app (and for the per-game
+//! off list); live changes reach games through shared memory.
 
 use std::path::PathBuf;
 
@@ -29,7 +30,7 @@ impl Default for AppSettings {
 }
 
 pub fn dir() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("FoveatedVR"))
+    crate::platform::config_dir()
 }
 
 fn path() -> Option<PathBuf> {
