@@ -10,7 +10,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import gaze  # noqa: E402
+import shm  # noqa: E402
 
 PROBE = os.path.join(os.path.dirname(__file__), "..", "..", "build", "Release", "fov_probe.exe")
 
@@ -22,31 +22,32 @@ def probe():
 class Layout(unittest.TestCase):
     # The same numbers native/include/fov_shm.h and app/crates/shm assert.
     def test_offsets(self):
-        self.assertEqual(ctypes.sizeof(gaze.Settings), 96)
-        self.assertEqual(gaze.Settings.inner_deg.offset, 24)
-        self.assertEqual(gaze.Settings.rate.offset, 32)
-        self.assertEqual(gaze.Settings.saccade_hold_ms.offset, 64)
-        self.assertEqual(ctypes.sizeof(gaze.Gaze), 48)
-        self.assertEqual(gaze.Gaze.qpc.offset, 16)
-        self.assertEqual(gaze.Gaze.eye.offset, 24)
-        self.assertEqual(ctypes.sizeof(gaze.Stats), 256)
-        self.assertEqual(gaze.Stats.gaze_valid_pct.offset, 92)
-        self.assertEqual(gaze.Stats.frames.offset, 104)
-        self.assertEqual(gaze.Stats.last_error.offset, 128)
-        self.assertEqual(ctypes.sizeof(gaze.Slot), 368)
-        self.assertEqual(gaze.Slot.settings.offset, 8)
-        self.assertEqual(gaze.Slot.stats.offset, 112)
-        self.assertEqual(ctypes.sizeof(gaze.Shm), 3112)
-        self.assertEqual(gaze.Shm.settings_seq.offset, 16)
-        self.assertEqual(gaze.Shm.settings.offset, 24)
-        self.assertEqual(gaze.Shm.gaze.offset, 120)
-        self.assertEqual(gaze.Shm.slots.offset, 168)
+        self.assertEqual(ctypes.sizeof(shm.Settings), 96)
+        self.assertEqual(shm.Settings.inner_deg.offset, 24)
+        self.assertEqual(shm.Settings.rate.offset, 32)
+        self.assertEqual(shm.Settings.saccade_hold_ms.offset, 64)
+        self.assertEqual(ctypes.sizeof(shm.Gaze), 48)
+        self.assertEqual(shm.Gaze.qpc.offset, 16)
+        self.assertEqual(shm.Gaze.eye.offset, 24)
+        self.assertEqual(ctypes.sizeof(shm.Stats), 256)
+        self.assertEqual(shm.Stats.gaze_valid_pct.offset, 92)
+        self.assertEqual(shm.Stats.frames.offset, 104)
+        self.assertEqual(shm.Stats.focus.offset, 128)
+        self.assertEqual(shm.Stats.last_error.offset, 160)
+        self.assertEqual(ctypes.sizeof(shm.Slot), 368)
+        self.assertEqual(shm.Slot.settings.offset, 8)
+        self.assertEqual(shm.Slot.stats.offset, 112)
+        self.assertEqual(ctypes.sizeof(shm.Shm), 3112)
+        self.assertEqual(shm.Shm.settings_seq.offset, 16)
+        self.assertEqual(shm.Shm.settings.offset, 24)
+        self.assertEqual(shm.Shm.gaze.offset, 120)
+        self.assertEqual(shm.Shm.slots.offset, 168)
 
 
 @unittest.skipUnless(os.path.exists(PROBE), "native build missing")
 class TestSource(unittest.TestCase):
     def setUp(self):
-        self.writer = gaze.GazeWriter()
+        self.writer = shm.Writer()
 
     def tearDown(self):
         self.writer.close()
@@ -55,10 +56,10 @@ class TestSource(unittest.TestCase):
         self.writer.write((0.25, 0.4), (0.75, 0.6))
         got = probe()
         self.assertEqual(got["status"], "valid")
-        self.assertEqual(got["source"], gaze.SOURCE_TEST)
+        self.assertEqual(got["source"], shm.SOURCE_TEST)
         self.assertAlmostEqual(got["left"][0], 0.25, places=5)
         self.assertAlmostEqual(got["right"][1], 0.6, places=5)
-        self.assertEqual(self.writer.shm.magic, gaze.MAGIC)  # the core filled the header on its first map
+        self.assertEqual(self.writer.shm.magic, shm.MAGIC)  # the core filled the header on its first map
 
     def test_blink_and_invalid(self):
         self.writer.write((0.5, 0.5), (0.5, 0.5), blink=True)
@@ -69,7 +70,7 @@ class TestSource(unittest.TestCase):
     def test_stale(self):
         freq = ctypes.c_int64()
         ctypes.windll.kernel32.QueryPerformanceFrequency(ctypes.byref(freq))
-        self.writer.write((0.5, 0.5), (0.5, 0.5), stamp=gaze.qpc() - freq.value // 5)  # 200 ms old
+        self.writer.write((0.5, 0.5), (0.5, 0.5), stamp=shm.qpc() - freq.value // 5)  # 200 ms old
         self.assertEqual(probe()["status"], "stale")
 
 

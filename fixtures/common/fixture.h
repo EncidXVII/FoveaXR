@@ -13,6 +13,7 @@ struct Args {
     int heavy = 64;      // iterations of the heavy pixel loop
     int adapter = -1;    // DXGI adapter index when the runtime names none (null driver); -1 = first
     std::string gfx = "d3d11";  // OpenXR fixture: d3d11, d3d12, vulkan
+    std::string dump;           // D3D11: write each eye's last frame to <dump>_eye<N>.bmp
 };
 
 inline Args parse(int argc, char** argv) {
@@ -22,6 +23,7 @@ inline Args parse(int argc, char** argv) {
         else if (!std::strcmp(argv[i], "--heavy")) a.heavy = std::atoi(argv[i + 1]);
         else if (!std::strcmp(argv[i], "--adapter")) a.adapter = std::atoi(argv[i + 1]);
         else if (!std::strcmp(argv[i], "--gfx")) a.gfx = argv[i + 1];
+        else if (!std::strcmp(argv[i], "--dump")) a.dump = argv[i + 1];
     }
     return a;
 }

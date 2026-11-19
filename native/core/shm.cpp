@@ -53,7 +53,7 @@ extern "C" int fov_shm_connect(void) {
     // writes gaze. Two games starting at once may both do it, with the same values.
     if (g_shm->magic != FOV_SHM_MAGIC) {
         FovSettings s;
-        fov_settings_default(&s, FOV_PRESET_MEDIUM);
+        fov_settings_load(&s);
         write_block(g_shm->settings_seq, g_shm->settings, s);
         g_shm->version = FOV_SHM_VERSION;
         g_shm->size = sizeof(FovShm);
@@ -74,6 +74,29 @@ extern "C" int fov_shm_write_gaze(const FovGaze* in) {
     if (!usable()) return 0;
     write_block(g_shm->gaze_seq, g_shm->gaze, *in);
     return 1;
+}
+
+extern "C" int fov_shm_claim_slot(void) {
+    if (!usable()) return -1;
+    uint32_t me = GetCurrentProcessId();
+    for (int i = 0; i < FOV_SHM_SLOTS; ++i) {
+        std::atomic_ref<uint32_t> pid(g_shm->slots[i].pid);
+        uint32_t cur = pid.load();
+        if (cur && cur != me) {
+            // Taken unless its process is gone (a crashed game never frees its slot).
+            HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, cur);
+            bool alive = h && WaitForSingleObject(h, 0) == WAIT_TIMEOUT;
+            if (h) CloseHandle(h);
+            if (alive) continue;
+        }
+        if (pid.compare_exchange_strong(cur, me)) return i;
+    }
+    return -1;
+}
+
+extern "C" void fov_shm_write_stats(int slot, const FovStats* in) {
+    if (usable() && slot >= 0 && slot < FOV_SHM_SLOTS)
+        write_block(g_shm->slots[slot].stats_seq, g_shm->slots[slot].stats, *in);
 }
 
 extern "C" void fov_settings_default(FovSettings* out, uint32_t preset) {

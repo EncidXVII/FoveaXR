@@ -10,20 +10,6 @@ FetchContent_Declare(dxc
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE SOURCE_SUBDIR none)
 FetchContent_MakeAvailable(volk dxc)
 
-# OpenVR SDK files: the header, the import library, and the DLL games ship (which the proxy stands in for).
-set(openvr_dir ${CMAKE_BINARY_DIR}/_deps/openvr)
-foreach(item
-        "headers/openvr.h=1e6ed57199896cc1f7c5484e50fa18955e97be15be690beb28d998c877ead7fd"
-        "lib/win64/openvr_api.lib=a0bf57c5920f569e8d21ab3e5bc95bac4b73e2016217f8b5b93495a2a7197bbb"
-        "bin/win64/openvr_api.dll=bab8ac6ef64e68a9ca53315b0014d131088584b2efdfa6db511d67ec03cfcb4a"
-        "LICENSE=f56ff606104d4ef18e617921a75c73ad73b5a1a1d70c69590c29de16919e04ad")
-    string(REPLACE "=" ";" item ${item})
-    list(GET item 0 path)
-    list(GET item 1 hash)
-    file(DOWNLOAD https://raw.githubusercontent.com/ValveSoftware/openvr/v2.15.6/${path} ${openvr_dir}/${path}
-        EXPECTED_HASH SHA256=${hash})
-endforeach()
-
 # scene.hlsl: embedded as source for the D3D fixtures (compiled at run time) and as SPIR-V for Vulkan.
 set(gen ${CMAKE_CURRENT_BINARY_DIR}/gen)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS common/scene.hlsl)

@@ -23,8 +23,13 @@ int fov_shm_read_settings(FovSettings* out);
 int fov_shm_read_gaze(FovGaze* out);
 int fov_shm_write_gaze(const FovGaze* in);
 
-/* Defaults for a preset when no app has written settings (SPEC 3). */
+/* A stats slot for this process (claimed by pid, dead owners' slots reused), -1 if none; its stats writer. */
+int fov_shm_claim_slot(void);
+void fov_shm_write_stats(int slot, const FovStats* in);
+
+/* Defaults for a preset (SPEC 3), and the app's %APPDATA%\FoveatedVR\settings.toml applied over Medium. */
 void fov_settings_default(FovSettings* out, uint32_t preset);
+void fov_settings_load(FovSettings* out);
 
 int64_t fov_qpc_now(void);
 double fov_qpc_ms(int64_t from, int64_t to);

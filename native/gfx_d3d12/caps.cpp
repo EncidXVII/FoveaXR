@@ -10,6 +10,7 @@ Caps query(ID3D12Device* device) {
     if (device && SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &o, sizeof(o)))) {
         caps.tier = o.VariableShadingRateTier;
         caps.tile = o.ShadingRateImageTileSize;
+        caps.extra_rates = o.AdditionalShadingRatesSupported;
     }
     caps.usable = usable(caps.tier, caps.tile);
     return caps;

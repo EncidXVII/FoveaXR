@@ -1,4 +1,6 @@
 #include "d3d11_scene.h"
+#include <cstring>
+#include <vector>
 
 namespace fixture {
 
@@ -50,6 +52,37 @@ void D3d11Scene::render(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv, i
     ctx->PSSetShader(ui_.Get(), nullptr, 0);
     ctx->Draw(3, 0);
     ctx->OMSetRenderTargets(0, nullptr, nullptr);
+}
+
+void D3d11Scene::dump(ID3D11DeviceContext* ctx, ID3D11Texture2D* texture, const std::string& path) {
+    D3D11_TEXTURE2D_DESC d;
+    texture->GetDesc(&d);
+    d.Usage = D3D11_USAGE_STAGING, d.BindFlags = 0, d.CPUAccessFlags = D3D11_CPU_ACCESS_READ, d.MiscFlags = 0;
+    ComPtr<ID3D11Texture2D> staging;
+    check(device_->CreateTexture2D(&d, nullptr, &staging), "staging texture");
+    ctx->CopyResource(staging.Get(), texture);
+    D3D11_MAPPED_SUBRESOURCE m;
+    check(ctx->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &m), "Map");
+    bool rgba = d.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || d.Format == DXGI_FORMAT_R8G8B8A8_UNORM ||
+                d.Format == DXGI_FORMAT_R8G8B8A8_TYPELESS;
+    std::vector<uint8_t> px(size_t(d.Width) * d.Height * 4);
+    for (UINT y = 0; y < d.Height; ++y)
+        for (UINT x = 0; x < d.Width; ++x) {
+            const uint8_t* s = static_cast<uint8_t*>(m.pData) + size_t(y) * m.RowPitch + x * 4;
+            uint8_t* o = &px[(size_t(y) * d.Width + x) * 4];
+            o[0] = s[rgba ? 2 : 0], o[1] = s[1], o[2] = s[rgba ? 0 : 2], o[3] = s[3];
+        }
+    ctx->Unmap(staging.Get(), 0);
+    uint8_t header[54] = {'B', 'M'};
+    auto put = [&](int at, uint32_t v) { std::memcpy(header + at, &v, 4); };
+    put(2, uint32_t(54 + px.size())), put(10, 54), put(14, 40), put(18, d.Width), put(22, uint32_t(-int32_t(d.Height)));
+    header[26] = 1, header[28] = 32;
+    FILE* f = nullptr;
+    if (fopen_s(&f, path.c_str(), "wb") || !f) return;
+    fwrite(header, 1, sizeof(header), f);
+    fwrite(px.data(), 1, px.size(), f);
+    fclose(f);
+    log("dumped %s", path.c_str());
 }
 
 }  // namespace fixture

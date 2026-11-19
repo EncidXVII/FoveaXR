@@ -33,7 +33,8 @@ float4 ps_scene(VsOut i) : SV_Target {
     float heavy = 0;
     int n = (int)frame.params.y;
     for (int k = 0; k < n; ++k) {
-        p = float2(p.x * p.x - p.y * p.y, 2 * p.x * p.y) * 0.5 + sin(p.yx + k * 0.37 + frame.params.x);
+        // Bounded by construction (sin/cos), so long loops never overflow to NaN.
+        p = float2(sin(p.y * 1.9 + k * 0.37 + frame.params.x), cos(p.x * 1.7 - k * 0.23));
         heavy += abs(sin(p.x * 3.1 + p.y * 1.7));
     }
     heavy /= max(n, 1);

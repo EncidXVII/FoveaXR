@@ -110,7 +110,10 @@ pub struct Stats {
     pub frames: u64,
     pub rings_bound: u64,
     pub uncertain_eye: u64,
-    pub last_error: [u8; 128],
+    pub focus: [[f32; 2]; 2],
+    pub ui_skipped: u64,
+    pub pad2: u64,
+    pub last_error: [u8; 96],
 }
 
 #[repr(C)]
@@ -161,7 +164,8 @@ mod tests {
         assert_eq!(size_of::<Stats>(), 256);
         assert_eq!(offset_of!(Stats, gaze_valid_pct), 92);
         assert_eq!(offset_of!(Stats, frames), 104);
-        assert_eq!(offset_of!(Stats, last_error), 128);
+        assert_eq!(offset_of!(Stats, focus), 128);
+        assert_eq!(offset_of!(Stats, last_error), 160);
         assert_eq!(size_of::<Slot>(), 368);
         assert_eq!(offset_of!(Slot, settings), 8);
         assert_eq!(offset_of!(Slot, stats), 112);

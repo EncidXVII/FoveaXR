@@ -10,6 +10,8 @@ public:
     explicit D3d11Scene(ID3D11Device* device);
     // Depth is the fixture's own, one per eye, made on first use at the eye's size.
     void render(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv, int eye, UINT w, UINT h, const Constants& c);
+    // A top-down 32-bit BMP of an 8-bit RGBA or BGRA texture, for the harness's image checks.
+    void dump(ID3D11DeviceContext* ctx, ID3D11Texture2D* texture, const std::string& path);
 
 private:
     ComPtr<ID3D11Device> device_;

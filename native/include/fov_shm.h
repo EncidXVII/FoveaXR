@@ -77,7 +77,10 @@ typedef struct FovStats {
     float gaze_valid_pct;
     float eye_ms_on, eye_ms_off; /* eye-pass GPU time EMA with foveation on and off (A/B) */
     uint64_t frames, rings_bound, uncertain_eye;
-    char last_error[128];
+    float focus[2][2];    /* last focus point per eye, UV (the harness checks it follows the test gaze) */
+    uint64_t ui_skipped;  /* passes on eye-sized targets left unfoveated (no depth: UI, post) */
+    uint64_t pad2;
+    char last_error[96];
 } FovStats;
 
 typedef struct FovSlot {
@@ -104,7 +107,7 @@ static_assert(sizeof(FovSettings) == 96 && offsetof(FovSettings, inner_deg) == 2
               && offsetof(FovSettings, saccade_hold_ms) == 64);
 static_assert(sizeof(FovGaze) == 48 && offsetof(FovGaze, qpc) == 16 && offsetof(FovGaze, eye) == 24);
 static_assert(sizeof(FovStats) == 256 && offsetof(FovStats, gaze_valid_pct) == 92 && offsetof(FovStats, frames) == 104
-              && offsetof(FovStats, last_error) == 128);
+              && offsetof(FovStats, focus) == 128 && offsetof(FovStats, last_error) == 160);
 static_assert(sizeof(FovSlot) == 368 && offsetof(FovSlot, settings) == 8 && offsetof(FovSlot, stats) == 112);
 static_assert(sizeof(FovShm) == 3112 && offsetof(FovShm, settings_seq) == 16 && offsetof(FovShm, settings) == 24
               && offsetof(FovShm, gaze) == 120 && offsetof(FovShm, slots) == 168);

@@ -18,7 +18,7 @@ import sys
 import threading
 import time
 
-import gaze
+import shm
 import steamvr
 import windows
 
@@ -52,68 +52,57 @@ def proxied_copy(exe, name):
     return os.path.join(folder, os.path.basename(exe))
 
 
-def keep_gaze_fresh(uv, stop):
-    writer = gaze.GazeWriter()
-    while not stop.wait(0.005):
-        writer.write(uv, uv)
-    writer.close()
-
-
-def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("fixture", choices=sorted(FIXTURES))
-    p.add_argument("--frames", type=int, default=600)
-    p.add_argument("--heavy", type=int, default=64)
-    p.add_argument("--adapter", type=int)
-    p.add_argument("--layer", action="store_true")
-    p.add_argument("--proxy", action="store_true")
-    p.add_argument("--gaze")
-    p.add_argument("--secondary", action="store_true")
-    p.add_argument("--timeout", type=float, default=120)
-    a = p.parse_args()
-
-    api, exe, args = FIXTURES[a.fixture]
+def run(fixture, frames=600, heavy=64, adapter=None, layer=False, proxy=False, gaze=None, mode=None, preset="medium",
+        tint=False, dump=None, screen=None, timeout=120):
+    """One fixture run inside an open null-driver session. mode: shm.MODE_* to set this run's settings (tests only).
+    Returns a dict: passed, exit, out and core log lines, the core's published stats."""
+    api, exe, args = FIXTURES[fixture]
     if not os.path.exists(exe):
         sys.exit(f"{exe} missing: build first (cmake --build build --config Release)")
-    hello = a.fixture == "hello_xr"
+    hello = fixture == "hello_xr"
+    args = list(args)
     if not hello:
-        args += ["--frames", str(a.frames), "--heavy", str(a.heavy)]
-        if a.adapter is not None and api == "openvr":
-            args += ["--adapter", str(a.adapter)]
-    if a.proxy:
-        if api != "openvr":
-            sys.exit("--proxy is for OpenVR fixtures")
-        exe = proxied_copy(exe, a.fixture)
+        args += ["--frames", str(frames), "--heavy", str(heavy)]
+        if adapter is not None and api == "openvr":
+            args += ["--adapter", str(adapter)]
+        if dump:
+            args += ["--dump", dump]
+    if proxy:
+        exe = proxied_copy(exe, fixture)
 
     os.makedirs(OUT, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    log_file = os.path.join(OUT, f"{a.fixture}-{stamp}.core.log")
+    log_file = os.path.join(OUT, f"{fixture}-{stamp}.core.log")
     env = dict(os.environ, FOV_LOG_FILE=log_file)
     if api == "openxr":
         env["XR_RUNTIME_JSON"] = steamvr.runtime_json()
         env["XR_API_LAYER_PATH"] = BIN
-        env["XR_ENABLE_API_LAYERS"] = ";".join([LAYER, HARNESS_LAYER] if a.layer else [HARNESS_LAYER])
-        env["FOV_HARNESS_ADAPTER"] = str(a.adapter or 0)
+        env["XR_ENABLE_API_LAYERS"] = ";".join([LAYER, HARNESS_LAYER] if layer else [HARNESS_LAYER])
+        env["FOV_HARNESS_ADAPTER"] = str(adapter or 0)
 
-    screen = steamvr.secondary_monitor() if a.secondary else None
+    writer = shm.Writer()  # held for the whole run: the mapping, and the stats in it, outlive the game
+    if mode is not None:
+        writer.settings(mode=mode, preset=preset, tint=tint)
     stop_gaze = threading.Event()
-    if a.gaze:
-        uv = tuple(float(x) for x in a.gaze.split(","))
-        threading.Thread(target=keep_gaze_fresh, args=(uv, stop_gaze), daemon=True).start()
 
+    def keep_gaze_fresh():
+        while not stop_gaze.wait(0.005):
+            writer.write(gaze, gaze)
+
+    if gaze:
+        threading.Thread(target=keep_gaze_fresh, daemon=True).start()
     started = time.time()
-    with steamvr.null_driver(window=screen), windows.keep_on(screen, WATCHED | {os.path.basename(exe).lower()}):
+    with windows.keep_on(screen, WATCHED | {os.path.basename(exe).lower()}):
         # stdin stays an open pipe: hello_xr quits on the first key it reads.
         proc = subprocess.Popen([exe, *args], cwd=os.path.dirname(exe), env=env, stdin=subprocess.PIPE,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True, errors="replace")
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
         lines = []
         reader = threading.Thread(target=lambda: lines.extend(proc.stdout), daemon=True)
         reader.start()
         try:
             # hello_xr never exits by itself: after 30 s it gets the key it waits for and shuts down cleanly (killing
             # it would lose its buffered log).
-            code = proc.wait(timeout=30 if hello else a.timeout)
+            code = proc.wait(timeout=30 if hello else timeout)
             if hello:
                 code = "exited early"
         except subprocess.TimeoutExpired:
@@ -130,6 +119,11 @@ def main():
                 proc.kill()
         reader.join(5)
     stop_gaze.set()
+    time.sleep(0.05)
+    stats = writer.stats(os.path.basename(exe).lower())
+    stats = {k: (list(map(list, getattr(stats, k))) if k == "focus" else getattr(stats, k)) for k, _ in
+             shm.Stats._fields_ if k not in ("exe", "last_error", "pad2")} if stats else None
+    writer.close()
 
     core = []
     if os.path.exists(log_file):
@@ -140,19 +134,39 @@ def main():
         passed = code == "stopped" and any("XR_SESSION_STATE_FOCUSED" in line for line in out)
     else:
         passed = code == 0 and any(line.startswith("fixture: done:") for line in out)
-    if a.layer:
-        passed = passed and any("layer" in line and "instance" in line for line in core) \
-            and any("session:" in line for line in core)
-    if a.proxy:
-        passed = passed and any("openvr proxy" in line and "forwarding" in line for line in core)
-    with open(os.path.join(OUT, f"{a.fixture}-{stamp}.out.log"), "w", encoding="utf-8") as f:
+    if layer or proxy:
+        passed = passed and any("hooks on" in line for line in core)
+    with open(os.path.join(OUT, f"{fixture}-{stamp}.out.log"), "w", encoding="utf-8") as f:
         f.write("\n".join(out))
-    print(json.dumps({
-        "fixture": a.fixture, "passed": passed, "exit": code, "seconds": round(time.time() - started, 1),
-        "fixture_log": [line for line in out if line.startswith("fixture:")][-4:],
-        "core_log": core[-6:],
-    }))
-    return 0 if passed else 1
+    return {"fixture": fixture, "passed": passed, "exit": code, "seconds": round(time.time() - started, 1),
+            "fixture_log": [line for line in out if line.startswith("fixture:")][-3:], "core_log": core[-8:],
+            "stats": stats}
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("fixture", choices=sorted(FIXTURES))
+    p.add_argument("--frames", type=int, default=600)
+    p.add_argument("--heavy", type=int, default=64)
+    p.add_argument("--adapter", type=int)
+    p.add_argument("--layer", action="store_true")
+    p.add_argument("--proxy", action="store_true")
+    p.add_argument("--gaze")
+    p.add_argument("--eye", action="store_true", help="eye-tracked mode for this run (with --gaze)")
+    p.add_argument("--tint", action="store_true")
+    p.add_argument("--secondary", action="store_true")
+    p.add_argument("--timeout", type=float, default=120)
+    a = p.parse_args()
+    if a.proxy and FIXTURES[a.fixture][0] != "openvr":
+        sys.exit("--proxy is for OpenVR fixtures")
+    gaze = tuple(float(x) for x in a.gaze.split(",")) if a.gaze else None
+    mode = shm.MODE_EYE if a.eye else shm.MODE_FIXED if a.tint else None
+    screen = steamvr.secondary_monitor() if a.secondary else None
+    with steamvr.null_driver(window=screen):
+        r = run(a.fixture, a.frames, a.heavy, a.adapter, a.layer, a.proxy, gaze, mode, tint=a.tint, screen=screen,
+                timeout=a.timeout)
+    print(json.dumps(r))
+    return 0 if r["passed"] else 1
 
 
 if __name__ == "__main__":

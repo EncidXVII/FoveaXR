@@ -5,13 +5,14 @@
 #include <openxr/openxr_platform.h>
 #include "d3d11_scene.h"
 #include "xr_fixture.h"
+#include <string>
 
 namespace fixture {
 namespace {
 
 class D3d11 : public Gfx {
 public:
-    D3d11(XrInstance instance, XrSystemId system, const Args& args) {
+    D3d11(XrInstance instance, XrSystemId system, const Args& args) : dump_(args.dump), frames_(args.frames) {
         auto get = xr_proc<PFN_xrGetD3D11GraphicsRequirementsKHR>(instance, "xrGetD3D11GraphicsRequirementsKHR");
         XrGraphicsRequirementsD3D11KHR req = {XR_TYPE_GRAPHICS_REQUIREMENTS_D3D11_KHR};
         xr_check(get(instance, system, &req), "xrGetD3D11GraphicsRequirementsKHR");
@@ -39,12 +40,15 @@ public:
             ComPtr<ID3D11RenderTargetView> rtv;
             check(device_->CreateRenderTargetView(image.texture, &d, &rtv), "CreateRenderTargetView");
             rtv_[eye].push_back(rtv);
+            tex_[eye].push_back(image.texture);
         }
         w_[eye] = w, h_[eye] = h;
     }
 
     void render(int eye, uint32_t image, const Constants& c) override {
         scene_->render(ctx_.Get(), rtv_[eye][image].Get(), eye, w_[eye], h_[eye], c);
+        if (!dump_.empty() && ++rendered_[eye] == frames_)
+            scene_->dump(ctx_.Get(), tex_[eye][image], dump_ + "_eye" + std::to_string(eye) + ".bmp");
     }
 
 private:
@@ -55,6 +59,9 @@ private:
     DXGI_FORMAT format_ = DXGI_FORMAT_UNKNOWN;
     std::vector<ComPtr<ID3D11RenderTargetView>> rtv_[2];
     uint32_t w_[2] = {}, h_[2] = {};
+    std::vector<ID3D11Texture2D*> tex_[2];
+    std::string dump_;
+    int frames_, rendered_[2] = {};
 };
 
 }  // namespace
