@@ -91,7 +91,7 @@ class Writer:
         """The stats a game process published, by exe name (lowercase), or None."""
         for slot in self.shm.slots:
             if slot.pid and slot.stats.exe.decode(errors="replace") == exe:
-                return slot.stats
+                return Stats.from_buffer_copy(slot.stats)  # a copy: the mapping can close while it lives
         return None
 
     def write(self, left, right, valid=True, blink=False, stamp=None):

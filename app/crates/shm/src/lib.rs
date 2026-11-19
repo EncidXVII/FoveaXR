@@ -116,6 +116,28 @@ pub struct Stats {
     pub last_error: [u8; 96],
 }
 
+impl Stats {
+    /// The game's exe name.
+    pub fn exe(&self) -> String {
+        let end = self.exe.iter().position(|&b| b == 0).unwrap_or(self.exe.len());
+        String::from_utf8_lossy(&self.exe[..end]).into_owned()
+    }
+
+    /// Why foveation is not running in this game, in the words the app shows; None when it runs.
+    pub fn inactive_reason(&self) -> Option<&'static str> {
+        match self.reason {
+            0 => None,
+            1 => Some("turned off"),
+            2 => Some("off for this game"),
+            3 | 4 => Some("blocked: anti-cheat"),
+            5 => Some("game has its own foveated rendering"),
+            6 => Some("not a game"),
+            7 => Some("this GPU or graphics API has no variable rate shading"),
+            _ => Some("error, see logs"),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Slot {
@@ -144,7 +166,7 @@ pub struct Shm {
 #[cfg(windows)]
 mod mapping;
 #[cfg(windows)]
-pub use mapping::Mapping;
+pub use mapping::{Mapping, alive};
 
 #[cfg(test)]
 mod tests {

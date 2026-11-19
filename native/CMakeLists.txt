@@ -29,7 +29,7 @@ target_link_libraries(gfx_vulkan PUBLIC fov_vulkan_headers PRIVATE fov_warnings)
 # through XR_API_LAYER_PATH by the harness).
 add_library(layer_openxr SHARED layer_openxr/layer.cpp)
 set_target_properties(layer_openxr PROPERTIES OUTPUT_NAME fov_openxr_layer)
-target_link_libraries(layer_openxr PRIVATE fov_core gaze gfx_d3d11_nvapi gfx_d3d12 gfx_vulkan fov_openxr_headers
+target_link_libraries(layer_openxr PRIVATE fov_core gaze gfx_d3d11_nvapi gfx_d3d12 fov_vulkan_headers fov_openxr_headers
     fov_warnings)
 set(FOV_VERSION_NUMBER ${PROJECT_VERSION_MAJOR}${PROJECT_VERSION_MINOR}${PROJECT_VERSION_PATCH})
 configure_file(layer_openxr/manifest.json.in ${CMAKE_CURRENT_BINARY_DIR}/fov_openxr_layer.json @ONLY)

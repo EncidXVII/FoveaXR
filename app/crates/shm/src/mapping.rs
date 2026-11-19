@@ -4,13 +4,14 @@
 use std::ptr::{addr_of_mut, read_volatile, write_volatile};
 use std::sync::atomic::{AtomicU32, Ordering, fence};
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT};
 use windows::Win32::System::Memory::{
     CreateFileMappingW, FILE_MAP_ALL_ACCESS, MEMORY_MAPPED_VIEW_ADDRESS, MapViewOfFile, PAGE_READWRITE, UnmapViewOfFile,
 };
+use windows::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject};
 use windows::core::{HSTRING, PCWSTR};
 
-use crate::{MAGIC, NAME, Settings, Shm, VERSION, preset};
+use crate::{MAGIC, NAME, Settings, Shm, Stats, VERSION, preset};
 
 const RETRIES: usize = 64;
 
@@ -66,24 +67,62 @@ impl Mapping {
 
     /// None when every retry saw a write in progress.
     pub fn settings(&self) -> Option<Settings> {
-        // SAFETY: fields of a live view; a torn copy is detected by the counter and discarded.
-        unsafe {
-            let seq = AtomicU32::from_ptr(addr_of_mut!((*self.shm).settings_seq));
-            for _ in 0..RETRIES {
-                let before = seq.load(Ordering::Acquire);
-                if before & 1 == 1 {
-                    std::hint::spin_loop();
-                    continue;
-                }
-                let s = read_volatile(addr_of_mut!((*self.shm).settings));
-                fence(Ordering::Acquire);
-                if seq.load(Ordering::Relaxed) == before {
-                    return Some(s);
+        // SAFETY: fields of a live view.
+        unsafe { read(addr_of_mut!((*self.shm).settings_seq), addr_of_mut!((*self.shm).settings)) }
+    }
+
+    /// Stats of every claimed slot, with its process id (the process may have ended since).
+    pub fn stats(&self) -> Vec<(u32, Stats)> {
+        let mut out = Vec::new();
+        for i in 0..crate::SLOTS {
+            // SAFETY: fields of a live view; the pid is read atomically, the stats through their seqlock.
+            unsafe {
+                let slot = addr_of_mut!((*self.shm).slots[i]);
+                let pid = AtomicU32::from_ptr(addr_of_mut!((*slot).pid)).load(Ordering::Acquire);
+                if pid != 0
+                    && let Some(st) = read(addr_of_mut!((*slot).stats_seq), addr_of_mut!((*slot).stats))
+                {
+                    out.push((pid, st));
                 }
             }
         }
-        None
+        out
     }
+}
+
+/// Whether a process is still running (a game's slot outlives it until another game reuses it).
+pub fn alive(pid: u32) -> bool {
+    // SAFETY: plain Win32 calls on a handle closed before returning.
+    unsafe {
+        let Ok(h) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) else { return false };
+        let running = WaitForSingleObject(h, 0) == WAIT_TIMEOUT;
+        let _ = CloseHandle(h);
+        running
+    }
+}
+
+/// Seqlock read: copies the block and retries while a write was in progress or happened meanwhile.
+///
+/// # Safety
+/// Both pointers must point into the live view.
+unsafe fn read<T: Copy>(seq: *mut u32, block: *mut T) -> Option<T> {
+    // SAFETY: the caller guarantees both pointers are valid; a torn copy is detected by the counter and discarded.
+    unsafe {
+        let seq = AtomicU32::from_ptr(seq);
+        for _ in 0..RETRIES {
+            let before = seq.load(Ordering::Acquire);
+            if before & 1 == 1 {
+                std::hint::spin_loop();
+                continue;
+            }
+            let v = read_volatile(block);
+            fence(Ordering::Acquire);
+            if seq.load(Ordering::Relaxed) == before {
+                return Some(v);
+            }
+        }
+    }
+    None
 }
 
 impl Drop for Mapping {
