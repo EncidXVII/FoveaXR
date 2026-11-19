@@ -109,6 +109,15 @@ impl<C: ComponentHandle> Surface<C> {
         &mut self.rgba
     }
 
+    /// Types `text`, one key press and release per character (Slint key names, e.g. "\u{1b}" for Escape).
+    pub fn keys(&self, text: &str) {
+        for c in text.chars() {
+            let text: slint::SharedString = c.to_string().into();
+            let _ = self.window.window().dispatch_event_with_result(WindowEvent::KeyPressed { text: text.clone() });
+            let _ = self.window.window().dispatch_event_with_result(WindowEvent::KeyReleased { text });
+        }
+    }
+
     pub fn pointer(&self, x: f32, y: f32, kind: Pointer) {
         let position = LogicalPosition::new(x, y);
         let button = PointerEventButton::Left;

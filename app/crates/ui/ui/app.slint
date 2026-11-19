@@ -489,9 +489,11 @@ component GamesPage inherits FocusScope {
                 root.filter-picked(i);
             }
         }
+        // The list takes what the page leaves, never the height of all its rows (then it could not scroll).
         Rectangle {
             vertical-stretch: 1;
             min-height: 160px;
+            preferred-height: 160px;
             list := Flickable {
                 content-height: column.preferred-height;
                 column := VerticalLayout {
@@ -521,6 +523,12 @@ component GamesPage inherits FocusScope {
                 background: Tokens.edge;
                 height: max(32px, list.height * list.height / list.content-height);
                 y: (list.height - self.height) * (-list.content-y) / (list.content-height - list.height);
+            }
+            // Scroll edge: rows fade out under the filter bar instead of being cut off hard, only once scrolled.
+            if list.content-y < -1px: Rectangle {
+                y: 0;
+                height: 20px;
+                background: @linear-gradient(180deg, Tokens.bg 0%, transparent 100%);
             }
             // Empty states: say why the list is empty and what to do about it.
             if root.state != 3 || root.games.length == 0: VerticalLayout {
@@ -706,15 +714,23 @@ export component MainWindow inherits Window {
                     padding-left: root.narrow ? 0 : Tokens.space-3;
                     padding-top: Tokens.space-1;
                     padding-bottom: Tokens.space-5;
-                    spacing: Tokens.space-2;
+                    spacing: Tokens.space-3;
                     alignment: root.narrow ? center : start;
-                    // The mark in the theme's accent, as tall as the wordmark's capitals.
-                    Image {
-                        source: @image-url("../../../../packaging/brand/foveaxr-mark-white.png");
-                        colorize: Tokens.accent;
+                    // The mark in the theme's accent, as tall as the wordmark's capitals and centred on them (Anton's
+                    // caps sit in the middle of its line box; measured in the QA render). Centred within the row's
+                    // own padded box, not the whole row, whose padding is uneven.
+                    Rectangle {
                         width: Tokens.type-brand * 1.15;
+                        // Its own height: in the compact sidebar there is no wordmark to size the row, and a
+                        // stretching row pushed the mark and the tabs down.
                         height: self.width;
-                        y: (parent.height - self.height) / 2;
+                        Image {
+                            source: @image-url("../../../../packaging/brand/foveaxr-mark-white.png");
+                            colorize: Tokens.accent;
+                            width: parent.width;
+                            height: self.width;
+                            y: (parent.height - self.height) / 2;
+                        }
                     }
                     if !root.narrow: Text {
                         vertical-alignment: center;
@@ -736,9 +752,6 @@ export component MainWindow inherits Window {
                     clicked => {
                         root.tab = i;
                         flick.content-y = 0;
-                        if i == 1 {
-                            games.focus();
-                        }
                     }
                 }
                 Rectangle {
@@ -755,11 +768,15 @@ export component MainWindow inherits Window {
                 page := VerticalLayout {
                     width: flick.width;
                     height: flick.content-height;
+                    // Pages start at the top of a tall window; only the games list grows into the spare height.
+                    alignment: root.tab == 1 ? stretch : start;
                     padding-top: 28px;
                     padding-bottom: 28px;
                     padding-left: root.narrow ? 20px : 36px;
-                    padding-right: root.narrow ? 20px : 36px;
+                    // A readable measure on a wide or maximised window: content stops at 880 px, left aligned.
+                    padding-right: max(root.narrow ? 20px : 36px, root.width - (root.narrow ? 68px : 200px) - 36px - 880px);
                     if root.tab == 0: FoveationPage {
+                        vertical-stretch: 0;
                         enabled <=> root.enabled;
                         mode <=> root.mode;
                         preset <=> root.preset;
@@ -771,9 +788,12 @@ export component MainWindow inherits Window {
                             root.changed();
                         }
                     }
-                    games := GamesPage {
-                        visible: root.tab == 1;
-                        height: root.tab == 1 ? self.preferred-height : 0;
+                    // Fills the page (the list inside scrolls itself) and takes the keyboard when it opens.
+                    if root.tab == 1: GamesPage {
+                        vertical-stretch: 1;
+                        init => {
+                            self.focus();
+                        }
                         games: root.games;
                         state: root.games-state;
                         note: root.games-note;
@@ -794,6 +814,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     if root.tab == 2: SettingsPage {
+                        vertical-stretch: 0;
                         tint <=> root.tint;
                         version: root.version;
                         exporting: root.exporting;

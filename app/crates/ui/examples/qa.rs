@@ -113,6 +113,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     s.ui.global::<Mode>().set_theme(3);
     save(&mut s, &out, "settings_sky")?;
 
+    // A tall window: pages start at the top.
+    let mut s = window(1200, 1100)?;
+    s.ui.set_tab(2);
+    save(&mut s, &out, "settings_tall")?;
+
     let mut s = window(560, 520)?;
     s.ui.set_tab(1);
     s.ui.set_games_state(3);
