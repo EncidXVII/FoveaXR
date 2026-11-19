@@ -1,0 +1,22 @@
+# Windows-only product: only the Windows target's dependency graph is checked.
+[graph]
+targets = ["x86_64-pc-windows-msvc"]
+
+[licenses]
+allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "Unicode-3.0", "Zlib", "GPL-3.0-or-later", "GPL-3.0-only", "0BSD", "CC0-1.0", "BSL-1.0"]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+
+[advisories]
+yanked = "deny"
+# Unmaintained, not vulnerable, and only reachable through Slint (no other path in our graph); drop when Slint does.
+ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, used by i-slint-core only" },
+    { id = "RUSTSEC-2026-0441", reason = "pin-utils unmaintained, used by slint-macros (build time) only" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

@@ -1,0 +1,11 @@
+{
+    "file_format_version": "1.0.0",
+    "api_layer": {
+        "name": "XR_APILAYER_FOVEATEDVR_core",
+        "library_path": "./fov_openxr_layer.dll",
+        "api_version": "1.1",
+        "implementation_version": "@FOV_VERSION_NUMBER@",
+        "description": "Foveated rendering for PC VR games",
+        "disable_environment": "FOV_OPENXR_DISABLE"
+    }
+}

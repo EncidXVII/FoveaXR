@@ -1,0 +1,7 @@
+/target
+/.agent
+/build
+/dist
+selftest-report.zip
+/harness/out
+__pycache__/

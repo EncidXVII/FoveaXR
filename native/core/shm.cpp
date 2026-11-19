@@ -1,0 +1,117 @@
+#include "fov_core.h"
+#include <windows.h>
+#include <atomic>
+#include <cstring>
+
+namespace {
+FovShm* g_shm = nullptr;
+constexpr int kRetries = 64;
+
+std::atomic_ref<uint32_t> seq(uint32_t& s) { return std::atomic_ref<uint32_t>(s); }
+
+bool usable() { return fov_shm_connect() && g_shm->magic == FOV_SHM_MAGIC && g_shm->version == FOV_SHM_VERSION; }
+
+template <typename T>
+bool read_block(uint32_t& counter, const T& block, T* out) {
+    for (int i = 0; i < kRetries; ++i) {
+        uint32_t before = seq(counter).load(std::memory_order_acquire);
+        if (before & 1) {
+            YieldProcessor();
+            continue;
+        }
+        std::memcpy(out, &block, sizeof(T));
+        std::atomic_thread_fence(std::memory_order_acquire);
+        if (seq(counter).load(std::memory_order_relaxed) == before) return true;
+    }
+    return false;
+}
+
+template <typename T>
+void write_block(uint32_t& counter, T& block, const T& in) {
+    seq(counter).fetch_add(1, std::memory_order_acq_rel);
+    std::memcpy(&block, &in, sizeof(T));
+    seq(counter).fetch_add(1, std::memory_order_release);
+}
+}  // namespace
+
+extern "C" int fov_shm_connect(void) {
+    static bool tried = false;
+    if (g_shm || tried) return g_shm != nullptr;
+    tried = true;
+    HANDLE h = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(FovShm), FOV_SHM_NAME);
+    if (!h) {
+        fov_log("shm: CreateFileMapping failed (%lu)", GetLastError());
+        return 0;
+    }
+    // The mapping lives as long as any process holds it; this handle is kept for the life of the process.
+    g_shm = static_cast<FovShm*>(MapViewOfFile(h, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(FovShm)));
+    if (!g_shm) {
+        fov_log("shm: MapViewOfFile failed (%lu)", GetLastError());
+        return 0;
+    }
+    // Whoever maps it first among the core and the app writes the header and default settings; the harness only
+    // writes gaze. Two games starting at once may both do it, with the same values.
+    if (g_shm->magic != FOV_SHM_MAGIC) {
+        FovSettings s;
+        fov_settings_default(&s, FOV_PRESET_MEDIUM);
+        write_block(g_shm->settings_seq, g_shm->settings, s);
+        g_shm->version = FOV_SHM_VERSION;
+        g_shm->size = sizeof(FovShm);
+        std::atomic_ref<uint32_t>(g_shm->magic).store(FOV_SHM_MAGIC, std::memory_order_release);
+    } else if (g_shm->version != FOV_SHM_VERSION) {
+        fov_log("shm: version %u, expected %u; ignoring it", g_shm->version, FOV_SHM_VERSION);
+    }
+    return 1;
+}
+
+extern "C" int fov_shm_read_settings(FovSettings* out) {
+    return usable() && read_block(g_shm->settings_seq, g_shm->settings, out);
+}
+
+extern "C" int fov_shm_read_gaze(FovGaze* out) { return usable() && read_block(g_shm->gaze_seq, g_shm->gaze, out); }
+
+extern "C" int fov_shm_write_gaze(const FovGaze* in) {
+    if (!usable()) return 0;
+    write_block(g_shm->gaze_seq, g_shm->gaze, *in);
+    return 1;
+}
+
+extern "C" void fov_settings_default(FovSettings* out, uint32_t preset) {
+    *out = {};
+    out->enabled = 1;
+    out->mode = FOV_MODE_FIXED;
+    out->preset = preset;
+    out->saccade_expand = 1;
+    // SPEC 3 starting values; gate P tuning may change them.
+    switch (preset) {
+    case FOV_PRESET_LOW:
+        out->inner_deg = 30, out->mid_deg = 45;
+        out->rate[0] = FOV_RATE_1X1, out->rate[1] = FOV_RATE_1X1, out->rate[2] = FOV_RATE_2X2;
+        break;
+    case FOV_PRESET_HIGH:
+        out->inner_deg = 15, out->mid_deg = 22;
+        out->rate[0] = FOV_RATE_1X1, out->rate[1] = FOV_RATE_2X2, out->rate[2] = FOV_RATE_4X4;
+        break;
+    default:
+        out->preset = FOV_PRESET_MEDIUM;
+        out->inner_deg = 22, out->mid_deg = 35;
+        out->rate[0] = FOV_RATE_1X1, out->rate[1] = FOV_RATE_2X2, out->rate[2] = FOV_RATE_4X4;
+    }
+    out->smooth_min_cutoff = 1.0f, out->smooth_beta = 0.05f, out->smooth_d_cutoff = 1.0f;
+    out->saccade_deg_s = 180, out->saccade_factor = 1.5f, out->saccade_hold_ms = 50;
+}
+
+extern "C" int64_t fov_qpc_now(void) {
+    LARGE_INTEGER t;
+    QueryPerformanceCounter(&t);
+    return t.QuadPart;
+}
+
+extern "C" double fov_qpc_ms(int64_t from, int64_t to) {
+    static const double freq = [] {
+        LARGE_INTEGER f;
+        QueryPerformanceFrequency(&f);
+        return (double)f.QuadPart;
+    }();
+    return (to - from) * 1000.0 / freq;
+}

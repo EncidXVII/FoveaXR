@@ -1,0 +1,8 @@
+# Games foveation never touches (SPEC 8): anti-cheat, where injected code risks bans, or a policy reason.
+# Matched by exe name or Steam app id. The folder scan for EasyAntiCheat / BattlEye files catches unlisted ones.
+[[game]]
+name = "VRChat"
+exe = "VRChat.exe"
+steam_app_id = 438100
+status = "blocked_anticheat"
+notes = "EasyAntiCheat; never supported"

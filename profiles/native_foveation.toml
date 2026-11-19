@@ -1,0 +1,2 @@
+# Games with their own foveated rendering (SPEC 8): we stand down so the game's version runs alone.
+# Same keys as blocklist_anticheat.toml, status = "native_foveation". Entries are added as titles are verified.
