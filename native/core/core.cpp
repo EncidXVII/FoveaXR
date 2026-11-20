@@ -107,22 +107,36 @@ bool Core::start(FovApi api) {
 }
 
 void Core::set_graphics(FovGfx gfx) {
-    s_->stats.gfx = gfx;
+    {
+        std::lock_guard lock(s_->m);
+        s_->stats.gfx = gfx;
+    }
     publish();
 }
 
 void Core::disable(FovReason reason, const char* why) {
     s_->disabled = true;
     s_->fove = false;
-    s_->stats.active = 0;
-    s_->stats.reason = reason;
-    snprintf(s_->stats.last_error, sizeof(s_->stats.last_error), "%s", why);
+    {
+        std::lock_guard lock(s_->m);
+        s_->stats.active = 0;
+        s_->stats.reason = reason;
+        snprintf(s_->stats.last_error, sizeof(s_->stats.last_error), "%s", why);
+    }
     fov_log("off: %s", why);
     publish();
 }
 
 void Core::begin_frame(const Fov fov[2], const float (*gaze_uv)[2], FovGazeSource source) {
     if (!active_ || s_->disabled) return;
+    // No projection yet (a runtime may answer zeros until tracking starts): nothing to centre the rings on, and a
+    // pattern built from it would shade the whole image coarsely.
+    for (int e = 0; e < 2; ++e) {
+        if (!(fov[e].r > fov[e].l && fov[e].u > fov[e].d)) {
+            s_->fove = false;
+            return;
+        }
+    }
     FovSettings set;
     if (fov_shm_read_settings(&set)) s_->settings = set;
     set = s_->settings;
@@ -168,7 +182,7 @@ void Core::begin_frame(const Fov fov[2], const float (*gaze_uv)[2], FovGazeSourc
         s_->stats.gaze_source = gaze_uv ? source : FOV_GAZE_NONE;
     }
     s_->tint = set.debug_tint != 0;
-    s_->fove = set.enabled && mode != FOV_MODE_OFF && !s_->ab_off;
+    s_->fove = set.enabled && mode != FOV_MODE_OFF && !s_->ab_off && !s_->disabled;
 }
 
 void Core::end_frame() {
@@ -186,6 +200,7 @@ void Core::set_eye_size(uint32_t w, uint32_t h) {
 }
 
 void Core::set_layout(FovLayout layout) {
+    std::lock_guard lock(s_->m);
     if (s_->stats.layout == (uint32_t)layout) return;
     s_->stats.layout = layout;
     fov_log("layout: %s", layout == FOV_LAYOUT_ARRAY ? "texture array" : layout == FOV_LAYOUT_WIDE ? "double wide" : "separate");

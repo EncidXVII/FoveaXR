@@ -159,7 +159,8 @@ fn running(pfx: &Path) -> bool {
 pub fn state(pfx: &Path, manifest: &str, records: &[Install]) -> State {
     let reg = pfx.join("user.reg");
     let Ok(text) = std::fs::read_to_string(&reg) else { return State::Unavailable };
-    let present = text.lines().any(|l| l.trim_end() == format!("{}=dword:00000000", quoted(manifest)));
+    let line = format!("{}=dword:00000000", quoted(manifest));
+    let present = text.lines().any(|l| l.trim_end() == line);
     match (present, records.iter().any(|r| r.reg == reg)) {
         (true, _) => State::On,
         // Recorded but gone: the prefix was reset or recreated.
@@ -217,14 +218,16 @@ fn restore(r: &Install, manifest: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Every prefix registration undone (the uninstaller runs this through `--uninstall`).
+/// Every prefix registration undone (the uninstaller runs this through `--uninstall`). A prefix that cannot be
+/// undone now (its game runs) does not stop the others; the first such error is returned.
 pub fn disable_all(manifest: &str) -> Result<(), String> {
+    let mut result = Ok(());
     for r in load() {
         if let Some(pfx) = r.reg.parent() {
-            disable(pfx, manifest)?;
+            result = result.and(disable(pfx, manifest));
         }
     }
-    Ok(())
+    result
 }
 
 #[cfg(test)]

@@ -366,8 +366,12 @@ pub fn run() -> Result<(), String> {
                             (e.vr, e.xr) = states(&e.game);
                         }
                         let msg = result.unwrap_or_else(|e| {
-                            // A running game holds its DLL open.
-                            if e.contains("os error 32") { format!("{e}. Close the game and try again") } else { e }
+                            // A running game holds its DLLs: a sharing violation, or access denied for a loaded one.
+                            if e.contains("os error 32") || e.contains("os error 5)") {
+                                format!("{e}. Close the game and try again")
+                            } else {
+                                e
+                            }
                         });
                         toast(&ui, &mut a, msg);
                     }

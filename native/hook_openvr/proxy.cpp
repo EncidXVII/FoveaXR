@@ -116,10 +116,12 @@ void submitted(vr::EVREye eye, const vr::Texture_t* t, const vr::VRTextureBounds
             fov::d3d12::install(dev, data->m_pCommandQueue);
             dev->Release();
         }
-    } else if (!installed) {
-        installed = true;
-        core.set_graphics(t->eType == vr::TextureType_Vulkan ? FOV_GFX_VULKAN : FOV_GFX_NONE);
-        core.disable(FOV_REASON_UNSUPPORTED_GPU, "graphics API not supported (D3D11 and D3D12 only)");
+    } else {
+        if (!installed) {
+            installed = true;
+            core.set_graphics(t->eType == vr::TextureType_Vulkan ? FOV_GFX_VULKAN : FOV_GFX_NONE);
+            core.disable(FOV_REASON_UNSUPPORTED_GPU, "graphics API not supported (D3D11 and D3D12 only)");
+        }
         return;
     }
     core.set_layout(wide ? FOV_LAYOUT_WIDE : FOV_LAYOUT_SEPARATE);
@@ -150,7 +152,7 @@ FnWait g_fn_wait = nullptr;
 FnSubmit g_fn_submit = nullptr;
 std::mutex g_patch_m;
 
-const Patched* originals(void* self) {
+Patched* originals(void* self) {
     void** table = *static_cast<void***>(self);
     for (int i = 0; i < g_patched_count; ++i)
         if (g_patched[i].table == table) return &g_patched[i];
@@ -215,12 +217,18 @@ void wrap(const char* name, void* iface) {
         return;
     }
     void** table = *static_cast<void***>(iface);
-    if (originals(iface) || g_patched_count == 8) return;
-    g_patched[g_patched_count] = {table, (WaitFn)table[2], (SubmitFn)table[slot]};
-    if (write_slot(&table[2], (void*)&wait_hook) && write_slot(&table[slot], (void*)&submit_hook)) {
-        g_patched_count++;
-        fov_log("openvr: wrapped %s", name);
+    if (table[2] == (void*)&wait_hook) return;
+    // A table we know, found unpatched: the game shut OpenVR down and started it again, and the runtime's DLL came
+    // back at the same address with fresh tables.
+    Patched* p = originals(iface);
+    if (!p) {
+        if (g_patched_count == 8) return;
+        p = &g_patched[g_patched_count++];
     }
+    // Recorded before the slots change: a call may arrive between the two writes.
+    *p = {table, (WaitFn)table[2], (SubmitFn)table[slot]};
+    if (write_slot(&table[2], (void*)&wait_hook) && write_slot(&table[slot], (void*)&submit_hook))
+        fov_log("openvr: wrapped %s", name);
 }
 
 // A game that shuts OpenVR down and starts it again gets new interfaces: ours are fetched again too.

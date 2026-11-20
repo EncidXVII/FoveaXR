@@ -32,6 +32,13 @@ fn hash_file(p: &Path) -> Option<u64> {
     std::fs::read(p).ok().map(|b| hash(&b))
 }
 
+/// Whether a DLL is a proxy of ours, of any version: each carries the name of the original it forwards to (UTF-16,
+/// as the Windows loader takes it).
+fn is_proxy(bytes: &[u8]) -> bool {
+    let marker: Vec<u8> = ORIGINAL.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    bytes.windows(marker.len()).any(|w| w == marker)
+}
+
 fn records_path() -> Option<PathBuf> {
     crate::settings::dir().map(|d| d.join("openvr_installs.toml"))
 }
@@ -116,13 +123,18 @@ pub fn enable(dlls: &[PathBuf], proxy: &Path) -> Result<(), String> {
     for dll in dlls {
         let orig = dll.with_file_name(ORIGINAL);
         let result = (|| {
-            // Already ours with the original beside it (its record lost): record it again, move nothing.
-            if hash_file(dll) == Some(proxy_hash)
-                && let Some(original) = hash_file(&orig)
-            {
+            let current = std::fs::read(dll).map_err(|e| e.to_string())?;
+            // Already ours (its record lost): the original beside it stays the original. Moving ours there would
+            // lose the game's own DLL and leave the proxy forwarding to itself.
+            if hash(&current) == proxy_hash || is_proxy(&current) {
+                let original = hash_file(&orig)
+                    .ok_or("the game's own openvr_api.dll is missing; verify the game's files in Steam")?;
+                if hash(&current) != proxy_hash {
+                    std::fs::write(dll, &proxy_bytes).map_err(|e| e.to_string())?;
+                }
                 return Ok(Install { dll: dll.clone(), original, proxy: proxy_hash });
             }
-            let original = hash_file(dll).ok_or("cannot read openvr_api.dll")?;
+            let original = hash(&current);
             std::fs::rename(dll, &orig).map_err(|e| e.to_string())?;
             if let Err(e) = std::fs::write(dll, &proxy_bytes) {
                 let _ = std::fs::rename(&orig, dll);
@@ -134,7 +146,7 @@ pub fn enable(dlls: &[PathBuf], proxy: &Path) -> Result<(), String> {
             Ok(r) => done.push(r),
             Err(e) => {
                 for r in &done {
-                    restore(r);
+                    let _ = restore(r);
                 }
                 return Err(format!("{}: {e}", dll.display()));
             }
@@ -145,25 +157,44 @@ pub fn enable(dlls: &[PathBuf], proxy: &Path) -> Result<(), String> {
 }
 
 /// Puts the original back. If the game replaced our DLL with a new original, that one stays and only our renamed
-/// old copy goes.
-fn restore(r: &Install) {
+/// old copy goes. An error (a running game holds its DLLs) leaves both files as they were.
+fn restore(r: &Install) -> std::io::Result<()> {
+    use std::io::ErrorKind::NotFound;
     let orig = r.dll.with_file_name(ORIGINAL);
-    if hash_file(&r.dll) == Some(r.proxy) {
-        if std::fs::remove_file(&r.dll).is_ok() {
-            let _ = std::fs::rename(&orig, &r.dll);
-        }
-    } else {
-        let _ = std::fs::remove_file(&orig);
+    let drop_orig = || match std::fs::remove_file(&orig) {
+        Err(e) if e.kind() != NotFound => Err(e),
+        _ => Ok(()),
+    };
+    match std::fs::read(&r.dll) {
+        // One step: the original takes the proxy's place, or nothing changed.
+        Ok(b) if (hash(&b) == r.proxy || is_proxy(&b)) && orig.exists() => std::fs::rename(&orig, &r.dll),
+        Ok(b) if hash(&b) == r.proxy || is_proxy(&b) => std::fs::remove_file(&r.dll),
+        Ok(_) => drop_orig(),
+        // The game is gone, or it removed the DLL.
+        Err(e) if e.kind() == NotFound => drop_orig(),
+        Err(e) => Err(e),
     }
 }
 
+/// A game whose files could not be put back keeps its record, so it stays listed as on and a later try (or the
+/// uninstaller) finds it again.
 pub fn disable(dlls: &[PathBuf]) -> Result<(), String> {
     let mut records = load();
-    for r in records.iter().filter(|r| dlls.contains(&r.dll)) {
-        restore(r);
-    }
-    records.retain(|r| !dlls.contains(&r.dll));
-    save(&records)
+    let mut failed = None;
+    records.retain(|r| {
+        if !dlls.contains(&r.dll) {
+            return true;
+        }
+        match restore(r) {
+            Ok(()) => false,
+            Err(e) => {
+                failed.get_or_insert(format!("{}: {e}", r.dll.display()));
+                true
+            }
+        }
+    });
+    save(&records)?;
+    failed.map_or(Ok(()), Err)
 }
 
 /// Every install undone (the uninstaller runs this through `--uninstall`).
@@ -175,6 +206,9 @@ pub fn disable_all() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Tests that install and remove share the one records file: one at a time.
+    static RECORDS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn records_round_trip() {
@@ -194,6 +228,7 @@ mod tests {
 
     #[test]
     fn enable_then_disable_restores_the_folder() -> Result<(), String> {
+        let _records = RECORDS.lock().map_err(|e| e.to_string())?;
         let dir = std::env::temp_dir().join(format!("fov-openvr-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let dll = dir.join("openvr_api.dll");
@@ -206,6 +241,37 @@ mod tests {
         enable(std::slice::from_ref(&dll), &proxy)?;
         assert_eq!(std::fs::read(&dll).ok().as_deref(), Some(&b"our proxy"[..]));
         assert_eq!(state(std::slice::from_ref(&dll), &load()), State::On);
+        disable(std::slice::from_ref(&dll))?;
+        assert_eq!(std::fs::read(&dll).ok().as_deref(), Some(&b"the game's original"[..]));
+        assert!(!dir.join(ORIGINAL).exists());
+        assert_eq!(load(), before);
+        if !had_dir && let Some(d) = crate::settings::dir() {
+            let _ = std::fs::remove_dir(d);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        Ok(())
+    }
+
+    #[test]
+    fn a_proxy_without_its_record_never_becomes_the_original() -> Result<(), String> {
+        let _records = RECORDS.lock().map_err(|e| e.to_string())?;
+        let dir = std::env::temp_dir().join(format!("fov-openvr-lost-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let (dll, proxy) = (dir.join("openvr_api.dll"), dir.join("proxy.dll"));
+        let marker: Vec<u8> = ORIGINAL.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let (old, new) = ([b"old ".as_slice(), &marker].concat(), [b"new ".as_slice(), &marker].concat());
+        assert!(is_proxy(&old) && !is_proxy(b"the game's original"));
+        std::fs::write(&dll, &old).map_err(|e| e.to_string())?;
+        std::fs::write(&proxy, &new).map_err(|e| e.to_string())?;
+        let before = load();
+        let had_dir = crate::settings::dir().is_some_and(|d| d.exists());
+        // No original beside it: nothing to forward to, nothing is moved.
+        assert!(enable(std::slice::from_ref(&dll), &proxy).is_err());
+        assert_eq!(std::fs::read(&dll).ok(), Some(old));
+        std::fs::write(dir.join(ORIGINAL), b"the game's original").map_err(|e| e.to_string())?;
+        enable(std::slice::from_ref(&dll), &proxy)?;
+        assert_eq!(std::fs::read(&dll).ok(), Some(new));
+        assert_eq!(std::fs::read(dir.join(ORIGINAL)).ok().as_deref(), Some(&b"the game's original"[..]));
         disable(std::slice::from_ref(&dll))?;
         assert_eq!(std::fs::read(&dll).ok().as_deref(), Some(&b"the game's original"[..]));
         assert!(!dir.join(ORIGINAL).exists());

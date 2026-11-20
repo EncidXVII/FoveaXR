@@ -7,3 +7,4 @@
 const unsigned fov_d3d11_slot_om_set = offsetof(ID3D11DeviceContextVtbl, OMSetRenderTargets) / sizeof(void*);
 const unsigned fov_d3d11_slot_om_set_uav =
     offsetof(ID3D11DeviceContextVtbl, OMSetRenderTargetsAndUnorderedAccessViews) / sizeof(void*);
+const unsigned fov_d3d11_slot_execute_list = offsetof(ID3D11DeviceContextVtbl, ExecuteCommandList) / sizeof(void*);

@@ -15,8 +15,10 @@ use std::process::ExitCode;
 fn main() -> ExitCode {
     // The uninstaller: every game's openvr_api.dll back as it was, and on Linux every Proton prefix's registry.
     if std::env::args().any(|a| a == "--uninstall") {
-        let proton = || if cfg!(unix) { proton::disable_all(&ui::layer_manifest()) } else { Ok(()) };
-        return match openvr::disable_all().and_then(|()| proton()) {
+        // Both run, whatever the first one says.
+        let openvr = openvr::disable_all();
+        let proton = if cfg!(unix) { proton::disable_all(&ui::layer_manifest()) } else { Ok(()) };
+        return match openvr.and(proton) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");

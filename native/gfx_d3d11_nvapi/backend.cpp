@@ -12,7 +12,7 @@
 #include "fov_dxgi.h"
 #include "fov_frame.h"
 
-extern "C" const unsigned fov_d3d11_slot_om_set, fov_d3d11_slot_om_set_uav;
+extern "C" const unsigned fov_d3d11_slot_om_set, fov_d3d11_slot_om_set_uav, fov_d3d11_slot_execute_list;
 
 namespace fov::d3d11 {
 namespace {
@@ -23,8 +23,10 @@ using OmSet = void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*, UINT, ID3D11RenderT
 using OmSetUav = void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*, UINT, ID3D11RenderTargetView* const*,
                                           ID3D11DepthStencilView*, UINT, UINT, ID3D11UnorderedAccessView* const*,
                                           const UINT*);
+using ExecuteList = void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*, ID3D11CommandList*, BOOL);
 OmSet g_om_set = nullptr;
 OmSetUav g_om_set_uav = nullptr;
+ExecuteList g_execute_list = nullptr;
 ID3D11Device* g_device = nullptr;
 ID3D11DeviceContext* g_ctx = nullptr;
 unsigned g_tile = 16;
@@ -194,6 +196,17 @@ void STDMETHODCALLTYPE om_set_uav(ID3D11DeviceContext* ctx, UINT n, ID3D11Render
     g_om_set_uav(ctx, n, rtvs, dsv, slot, nuav, uavs, counts);
     if (n != D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL) after_bind(ctx, n, rtvs, dsv);
 }
+
+// A command list was recorded on a deferred context, whose binds we never saw: the rate image of the last eye pass
+// must not reach its draws. The app's next bind on the immediate context decides again.
+void STDMETHODCALLTYPE execute_list(ID3D11DeviceContext* ctx, ID3D11CommandList* list, BOOL restore) {
+    if (ctx == g_ctx && g_bound && !t_inside) {
+        t_inside = true;
+        set_vrs(nullptr);
+        t_inside = false;
+    }
+    g_execute_list(ctx, list, restore);
+}
 }  // namespace
 
 bool install(ID3D11Device* device) {
@@ -215,6 +228,8 @@ bool install(ID3D11Device* device) {
     void** vt = *reinterpret_cast<void***>(g_ctx);
     bool ok = hook(vt[fov_d3d11_slot_om_set], (void*)&om_set, (void**)&g_om_set) &&
               hook(vt[fov_d3d11_slot_om_set_uav], (void*)&om_set_uav, (void**)&g_om_set_uav);
+    // Only games that render through deferred contexts need this one: without it the rest still works.
+    if (ok) hook(vt[fov_d3d11_slot_execute_list], (void*)&execute_list, (void**)&g_execute_list);
     fov_log("d3d11: NVAPI VRS, tile %u, hooks %s", g_tile, ok ? "on" : "failed");
     if (!ok) core.disable(FOV_REASON_ERROR, "D3D11: hooks failed");
     return ok;

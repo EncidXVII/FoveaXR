@@ -57,13 +57,15 @@ struct State {
     XrSession session = XR_NULL_HANDLE;
     FovGfx gfx = FOV_GFX_NONE;
     bool gaze_ext = false, gaze_supported = false, attached = false;
+    bool app_sets = false;  // the app made action sets of its own: it attaches and syncs them, ours rides along
+    bool alone = false;     // ours was attached alone: nobody else syncs it
     XrActionSet set = XR_NULL_HANDLE;
     XrAction gaze = XR_NULL_HANDLE;
     XrPath profile = XR_NULL_PATH, binding = XR_NULL_PATH;
     std::vector<XrActionSuggestedBinding> app_eye_bindings;
     XrSpace view = XR_NULL_HANDLE, gaze_space = XR_NULL_HANDLE;
     XrTime display = 0;
-    uint64_t frames = 0, synced_at = 0;
+    uint64_t frames = 0;
     std::map<XrSwapchain, Swapchain> swapchains;
 } s;
 
@@ -89,6 +91,12 @@ void setup_gaze(XrSystemId system) {
     s.gaze_supported = eye.supportsEyeGazeInteraction;
     fov_log("eye gaze: %s", s.gaze_supported ? "supported" : "not supported by this headset");
     if (!s.gaze_supported) return;
+    // Action sets belong to the instance: a later session attaches the one made for the first (making it again
+    // fails on its name).
+    if (s.set) {
+        s.gaze_supported = s.binding != XR_NULL_PATH;
+        return;
+    }
     XrActionSetCreateInfo asci = {XR_TYPE_ACTION_SET_CREATE_INFO};
     snprintf(asci.actionSetName, sizeof(asci.actionSetName), "fov_eye_gaze");
     snprintf(asci.localizedActionSetName, sizeof(asci.localizedActionSetName), "Foveated rendering eye gaze");
@@ -159,15 +167,21 @@ bool gaze_uv(const XrView views[2], float out[2][2]) {
 
 void begin_frame() {
     if (!s.view || !s.display) return;
-    // The app may never attach action sets or sync them (no controllers): do it for our set alone.
-    if (s.gaze_supported && !s.attached && s.frames > kAttachAloneAfter) {
+    // An app without action sets (no controllers) never attaches or syncs any: ours goes alone. Never when it has
+    // some: a session takes one attach, and ours going first would make the app's own fail, and a sync of ours
+    // alone would switch the app's sets off.
+    if (s.gaze_supported && !s.attached && !s.app_sets && s.frames > kAttachAloneAfter) {
         XrSessionActionSetsAttachInfo ai = {XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};
         ai.countActionSets = 1;
         ai.actionSets = &s.set;
-        if (XR_SUCCEEDED(g.xrAttachSessionActionSets(s.session, &ai))) after_attach();
-        else s.gaze_supported = false;
+        if (XR_SUCCEEDED(g.xrAttachSessionActionSets(s.session, &ai))) {
+            after_attach();
+            s.alone = true;
+        } else {
+            s.gaze_supported = false;
+        }
     }
-    if (s.attached && s.synced_at + 2 < s.frames) {
+    if (s.alone) {
         XrActiveActionSet as = {s.set, XR_NULL_PATH};
         XrActionsSyncInfo si = {XR_TYPE_ACTIONS_SYNC_INFO};
         si.countActiveActionSets = 1;
@@ -259,7 +273,7 @@ XrResult XRAPI_CALL destroy_session(XrSession session) {
         std::lock_guard lock(s.m);
         s.swapchains.clear();
     }
-    s.session = XR_NULL_HANDLE, s.view = s.gaze_space = XR_NULL_HANDLE, s.attached = false;
+    s.session = XR_NULL_HANDLE, s.view = s.gaze_space = XR_NULL_HANDLE, s.attached = s.alone = false;
     return g.xrDestroySession(session);  // destroys our spaces with it
 }
 
@@ -363,8 +377,12 @@ XrResult XRAPI_CALL sync(XrSession session, const XrActionsSyncInfo* info) {
     XrActionsSyncInfo mine = *info;
     mine.countActiveActionSets = (uint32_t)sets.size();
     mine.activeActionSets = sets.data();
-    s.synced_at = s.frames;
     return g.xrSyncActions(session, &mine);
+}
+
+XrResult XRAPI_CALL create_action_set(XrInstance instance, const XrActionSetCreateInfo* info, XrActionSet* set) {
+    s.app_sets = true;
+    return g.xrCreateActionSet(instance, info, set);
 }
 
 XrResult XRAPI_CALL get_proc(XrInstance instance, const char* name, PFN_xrVoidFunction* fn);
@@ -386,6 +404,7 @@ const Hook kHooks[] = {
     {"xrSuggestInteractionProfileBindings", (PFN_xrVoidFunction)suggest},
     {"xrAttachSessionActionSets", (PFN_xrVoidFunction)attach},
     {"xrSyncActions", (PFN_xrVoidFunction)sync},
+    {"xrCreateActionSet", (PFN_xrVoidFunction)create_action_set},
 };
 
 XrResult XRAPI_CALL get_proc(XrInstance instance, const char* name, PFN_xrVoidFunction* fn) {
@@ -438,6 +457,10 @@ XrResult XRAPI_CALL create_instance(const XrInstanceCreateInfo* info, const XrAp
     if (XR_FAILED(r)) return r;
     s.instance = *instance;
     s.gaze_ext = asked;
+    // A new instance: the action set and paths of an earlier one died with it.
+    s.set = XR_NULL_HANDLE, s.gaze = XR_NULL_HANDLE, s.profile = s.binding = XR_NULL_PATH;
+    s.app_eye_bindings.clear();
+    s.app_sets = false;
 #define FOV_LOAD(name) g_next_gipa(*instance, #name, reinterpret_cast<PFN_xrVoidFunction*>(&g.name));
     FOV_XR_NEXT(FOV_LOAD)
 #undef FOV_LOAD

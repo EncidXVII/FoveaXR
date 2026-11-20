@@ -107,8 +107,9 @@ extern "C" int fov_shm_claim_slot(void) {
         uint32_t cur = pid.load();
         if (cur && cur != me) {
             // Taken unless its process is gone (a crashed game never frees its slot).
+            // A process we may not open (it runs elevated) is there all the same.
             HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, cur);
-            bool alive = h && WaitForSingleObject(h, 0) == WAIT_TIMEOUT;
+            bool alive = h ? WaitForSingleObject(h, 0) == WAIT_TIMEOUT : GetLastError() == ERROR_ACCESS_DENIED;
             if (h) CloseHandle(h);
             if (alive) continue;
         }
