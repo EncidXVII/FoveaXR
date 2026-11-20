@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // settings.toml (written by the tray app) and the profile lists: a few flat `key = value` lines, so a line reader
 // does instead of a TOML library.
 #include <windows.h>

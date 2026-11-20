@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Fixture scene, shared by every fixture and graphics API. The eye pass draws a full-screen wall at depth 0.5 with a
 // high-frequency pattern fixed in view angle (0.5 degree checks + rings) and a heavy per-pixel loop, so shading
 // cost dominates and coarse shading is visible. The UI pass draws stripes into a sub-rectangle with no depth bound.

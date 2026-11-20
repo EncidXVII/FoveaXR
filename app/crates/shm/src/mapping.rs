@@ -1,7 +1,10 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! The mapping itself. Unsafe is confined here: raw pointers into memory other processes write.
 //!
-//! Windows: the named section the core maps too. Linux: the file /dev/shm/FoveatedVR.v1, which the core inside
-//! Wine/Proton maps as Z:\dev\shm\FoveatedVR.v1 (a named Wine section is invisible to Linux processes). The file
+//! Windows: the named section the core maps too. Linux: the file /dev/shm/FoveaXR.v1, which the core inside
+//! Wine/Proton maps as Z:\dev\shm\FoveaXR.v1 (a named Wine section is invisible to Linux processes). The file
 //! FOV_SHM_FILE names replaces either, for tests.
 #![allow(unsafe_code)]
 
@@ -16,7 +19,7 @@ const RETRIES: usize = 64;
 pub fn file_path() -> Option<std::path::PathBuf> {
     match std::env::var_os("FOV_SHM_FILE") {
         Some(p) => Some(p.into()),
-        None if cfg!(unix) => Some("/dev/shm/FoveatedVR.v1".into()),
+        None if cfg!(unix) => Some("/dev/shm/FoveaXR.v1".into()),
         None => None,
     }
 }

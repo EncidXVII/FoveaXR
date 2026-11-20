@@ -1,3 +1,6 @@
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Shared-memory layout and the test gaze source end to end: Python writes, the C++ gaze module reads (fov_probe).
 
 Run from the repo root after a native build: python -m unittest discover -s harness/tests
@@ -78,11 +81,11 @@ class TestSource(unittest.TestCase):
 
 @unittest.skipUnless(os.path.exists(PROBE), "native build missing")
 class FileBacked(unittest.TestCase):
-    r"""The Linux / Proton arrangement: the app maps a file (/dev/shm/FoveatedVR.v1), the core inside Wine maps the
+    r"""The Linux / Proton arrangement: the app maps a file (/dev/shm/FoveaXR.v1), the core inside Wine maps the
     same file (Z:\dev\shm\...). Here both sides map one temp file: Python as the app, fov_probe as the core."""
 
     def test_round_trip_through_a_file(self):
-        path = os.path.join(tempfile.mkdtemp(), "FoveatedVR.v1")
+        path = os.path.join(tempfile.mkdtemp(), "FoveaXR.v1")
         writer = shm.Writer(path)
         try:
             writer.write((0.1, 0.2), (0.3, 0.4))

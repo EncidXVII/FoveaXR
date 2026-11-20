@@ -1,3 +1,6 @@
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Registers the OpenXR API layer for the current user (no admin), or removes it with -Remove. The installer runs
 # this on install and uninstall; developers run it against build\Release to try the layer with a real headset.
 #   installer\register-layer.ps1 -Manifest build\Release\fov_openxr_layer.json [-Remove]

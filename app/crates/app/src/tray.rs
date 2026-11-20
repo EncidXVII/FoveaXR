@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Tray icon: open the window, quit. Windows: the notification area (tray-icon). Linux: a StatusNotifierItem
 //! (ksni) that KDE shows natively and GNOME with the AppIndicator extension. Without one the window stays the app.
 
@@ -29,13 +32,13 @@ mod imp {
 
     impl Tray {
         pub fn new() -> Result<Self, String> {
-            let open = MenuItem::new("Open FoveatedVR", true, None);
+            let open = MenuItem::new("Open FoveaXR", true, None);
             let quit = MenuItem::new("Quit", true, None);
             let menu = Menu::new();
             menu.append_items(&[&open, &PredefinedMenuItem::separator(), &quit]).map_err(|e| e.to_string())?;
             let icon = TrayIconBuilder::new()
                 .with_menu(Box::new(menu))
-                .with_tooltip("FoveatedVR")
+                .with_tooltip("FoveaXR")
                 .with_icon(icon()?)
                 .build()
                 .map_err(|e| e.to_string())?;
@@ -77,10 +80,10 @@ mod imp {
 
     impl ksni::Tray for Item {
         fn id(&self) -> String {
-            "foveatedvr".into()
+            "foveaxr".into()
         }
         fn title(&self) -> String {
-            "FoveatedVR".into()
+            "FoveaXR".into()
         }
         fn icon_pixmap(&self) -> Vec<ksni::Icon> {
             vec![self.icon.clone()]
@@ -92,7 +95,7 @@ mod imp {
             use ksni::menu::StandardItem;
             vec![
                 StandardItem {
-                    label: "Open FoveatedVR".into(),
+                    label: "Open FoveaXR".into(),
                     activate: Box::new(|t: &mut Self| {
                         let _ = t.tx.send(Command::Open);
                     }),

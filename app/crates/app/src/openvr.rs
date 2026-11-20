@@ -1,5 +1,8 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Per-game OpenVR enable (SPEC 12): the game's openvr_api.dll is renamed to openvr_api.fov-orig.dll and our proxy
-//! takes its place. Each install is recorded with both files' hashes in %APPDATA%\FoveatedVR\openvr_installs.toml,
+//! takes its place. Each install is recorded with both files' hashes in %APPDATA%\FoveaXR\openvr_installs.toml,
 //! so disabling (and uninstalling) puts the original back exactly, and a game update that replaced the DLL is noticed.
 
 use std::path::{Path, PathBuf};

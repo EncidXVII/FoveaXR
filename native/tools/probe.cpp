@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // fov_probe: prints, as one JSON line, what the core sees on this PC.
 //   --gaze  the shared-memory gaze sample (the harness test checks its own writes come through)
 //   --caps  variable rate shading support per adapter and graphics API

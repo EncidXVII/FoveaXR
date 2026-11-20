@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Every export of the public openvr_api.dll (v2.15.6 and the older subsets games ship), in the order of the
 // FOV_PROXY_TARGETS table: stubs.asm and openvr_api.def list the same names at the same indices.
 #pragma once

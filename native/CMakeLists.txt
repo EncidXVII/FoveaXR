@@ -1,3 +1,6 @@
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Warnings are errors here (not in third-party code): CI fails on a new one.
 add_library(fov_warnings INTERFACE)
 target_compile_options(fov_warnings INTERFACE $<$<COMPILE_LANGUAGE:CXX>:/W4 /WX /permissive- /EHsc /utf-8>)
@@ -54,7 +57,7 @@ target_link_libraries(harness_layer PRIVATE fov_core fov_vulkan_headers dxgi fov
 file(GENERATE OUTPUT $<TARGET_FILE_DIR:harness_layer>/fov_harness_layer.json CONTENT [[{
     "file_format_version": "1.0.0",
     "api_layer": {
-        "name": "XR_APILAYER_FOVEATEDVR_harness",
+        "name": "XR_APILAYER_FOVEAXR_harness",
         "library_path": "./fov_harness_layer.dll",
         "api_version": "1.1",
         "implementation_version": "1",

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "fov_core.h"
 #include <windows.h>
 #include <atomic>
@@ -38,12 +41,12 @@ extern "C" int fov_shm_connect(void) {
     static bool tried = false;
     if (g_shm || tried) return g_shm != nullptr;
     tried = true;
-    // Inside Wine a named section is invisible to Linux processes: the app there maps /dev/shm/FoveatedVR.v1, which
-    // Wine shows as Z:\dev\shm\FoveatedVR.v1, and a file mapping of it shares the same pages. FOV_SHM_FILE forces
+    // Inside Wine a named section is invisible to Linux processes: the app there maps /dev/shm/FoveaXR.v1, which
+    // Wine shows as Z:\dev\shm\FoveaXR.v1, and a file mapping of it shares the same pages. FOV_SHM_FILE forces
     // the file path anywhere (tests on Windows).
     wchar_t file_path[MAX_PATH] = L"";
     if (!GetEnvironmentVariableW(L"FOV_SHM_FILE", file_path, MAX_PATH) && fov_is_wine())
-        wcscpy_s(file_path, L"Z:\\dev\\shm\\FoveatedVR.v1");
+        wcscpy_s(file_path, L"Z:\\dev\\shm\\FoveaXR.v1");
     HANDLE file = INVALID_HANDLE_VALUE;
     if (file_path[0]) {
         file = CreateFileW(file_path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,

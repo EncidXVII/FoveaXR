@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Installed Steam games that run in VR: found by the VR runtime DLLs they ship (openvr_api.dll, openxr_loader.dll).
 
 use std::path::{Path, PathBuf};

@@ -1,3 +1,6 @@
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Fixture apps for the harness: they render like a game (eye pass with depth, then a UI pass without) so the gates
 # can check what foveation does to each pass. Third-party pieces pinned by hash, see THIRD_PARTY_NOTICES.md.
 FetchContent_Declare(volk

@@ -1,19 +1,46 @@
-# FoveatedVR (working name)
+<img src="packaging/brand/foveaxr-mark.svg" width="72" alt="FoveaXR logo">
 
-Free foveated rendering for your Steam VR library. Fixed foveation for every headset, eye-tracked for Steam Frame and
-other eye-tracking headsets.
+# FoveaXR: foveated rendering for any PC VR game
+
+[![CI](https://github.com/EncidXVII/FoveaXR/actions/workflows/ci.yml/badge.svg)](https://github.com/EncidXVII/FoveaXR/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/EncidXVII/FoveaXR?include_prereleases&label=download)](https://github.com/EncidXVII/FoveaXR/releases/latest)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+
+**FoveaXR is a free, open-source tool that adds foveated rendering to the PC VR games you already own.** Fixed
+foveation for every headset, eye-tracked for Steam Frame and other eye-tracking headsets. It works in SteamVR
+(OpenVR) and OpenXR games without mods or per-game patches: install it, start the game, get GPU time back.
+
+**[Download the latest release](https://github.com/EncidXVII/FoveaXR/releases/latest)** · [Supported GPUs and games](#supported) · [Common questions](#common-questions) · [Honest limits](#honest-limits)
+
+| Foveation | Games |
+|---|---|
+| ![FoveaXR main window: foveation on, Fixed mode, Medium preset, 1.24 ms of GPU time saved per frame](docs/img/main.png) | ![FoveaXR games list: Steam VR games with On, Off, Updated and Blocked states and one button each](docs/img/games.png) |
 
 The edge of each eye's view is shaded more coarsely than the centre, where you look, so the GPU does less work per
 frame. On the test scene (a pixel-heavy fixture) eye rendering took 1.37 ms without and 0.25 ms with the High preset.
 Real games save less: how much depends on how much of their frame is pixel shading. Measure your own with Ctrl+F9.
 
+## At a glance
+
+| | |
+|---|---|
+| **What it is** | Foveated rendering for PC VR games that have none: the edge of each eye's view is shaded at a lower rate than the centre, so the GPU does less work per frame |
+| **Use it for** | More frames per second or a higher resolution in SteamVR and OpenXR games, with no change to the game |
+| **Modes** | Fixed (every headset) and eye-tracked (headsets that share eye tracking with PC games, such as Steam Frame); presets Low, Medium, High |
+| **Games** | OpenXR games (all of them, through an API layer) and OpenVR games (per game, one click); Direct3D 11 and 12 |
+| **GPUs** | Direct3D 12: NVIDIA RTX 20 and newer, AMD RX 6000 and newer, Intel Arc. Direct3D 11: NVIDIA RTX 20 and newer |
+| **Platforms** | Windows 10 and 11; Linux with Proton (experimental, Direct3D 12 games) |
+| **Safe to try** | Never runs in anti-cheat games; uninstall puts every game file back |
+| **Price** | Free. No account, no telemetry |
+| **License** | Open source, `GPL-3.0-or-later`, © 2026 EncidXVII |
+
 ## Install (Windows)
 
-1. Download `FoveatedVR-1.0.0.zip` from Releases, check it against `FoveatedVR-1.0.0.zip.sha256`, unzip.
+1. Download `FoveaXR-1.0.0.zip` from Releases, check it against `FoveaXR-1.0.0.zip.sha256`, unzip.
 2. Run `Install.cmd`. No admin rights: it installs for your Windows user only and starts the app (tray icon).
 3. OpenXR games are foveated from their next start. OpenVR games: open the app's **Games** tab and press **Enable**.
 
-Uninstall: Start menu → **Uninstall FoveatedVR**. It puts every game's original `openvr_api.dll` back and removes the
+Uninstall: Start menu → **Uninstall FoveaXR**. It puts every game's original `openvr_api.dll` back and removes the
 OpenXR layer, settings and logs.
 
 ## Install (Linux, experimental)
@@ -21,13 +48,13 @@ OpenXR layer, settings and logs.
 For SteamVR on Linux with games running under Proton. **Experimental: built and unit tested, not yet tested in a
 headset or with a real game.**
 
-1. Download `FoveatedVR-1.0.0-linux-x86_64.tar.gz`, check it against its `.sha256`, unpack.
-2. Run `./install.sh`: per user, no root (`~/.local/share/foveatedvr`, a menu entry). The tray icon needs a
+1. Download `FoveaXR-1.0.0-linux-x86_64.tar.gz`, check it against its `.sha256`, unpack.
+2. Run `./install.sh`: per user, no root (`~/.local/share/foveaxr`, a menu entry). The tray icon needs a
    StatusNotifier host: KDE has one, GNOME needs the AppIndicator extension; without it the window is the app.
 3. In the **Games** tab, **Enable** each game, with the game closed. OpenVR games get the `openvr_api.dll` swap as on
    Windows; OpenXR games get our layer registered in their own Proton prefix (start a game once first so it has one).
 
-Uninstall: `~/.local/share/foveatedvr/uninstall.sh` (every game and prefix put back, then the app removed).
+Uninstall: `~/.local/share/foveaxr/uninstall.sh` (every game and prefix put back, then the app removed).
 
 What is expected to work under Proton, from the translation layers' public source: **D3D12 games** (vkd3d-proton
 turns D3D12 VRS Tier 2 into Vulkan fragment shading rate; needs a Vulkan driver that has it). **D3D11 games are not
@@ -75,6 +102,39 @@ VR APIs: OpenXR (API layer, all OpenXR games on any runtime) and OpenVR (per-gam
 - Windows may warn about the unsigned app, and antivirus may flag `openvr_api.dll` in game folders (it wraps the
   game's original DLL). Code signing comes later.
 
+## Common questions
+
+**What is foveated rendering?** Your eye sees sharply only where it looks. Foveated rendering shades the middle of
+each eye's image at full detail and the edges at a lower rate (one shaded pixel covers a 2x2 or 4x4 block), so the
+GPU has less to do. Fixed foveation keeps the sharp zone in the middle of the lens; eye-tracked foveation moves it
+to where you look.
+
+**Does it work with my game?** OpenXR games work as soon as FoveaXR is installed. OpenVR (SteamVR) games need one
+**Enable** click each in the Games tab. The game must render with Direct3D 11 (NVIDIA only) or Direct3D 12. Games
+with anti-cheat and games that already foveate themselves are left alone.
+
+**Which headsets work?** Fixed mode works on every PC VR headset: Valve Index, Meta Quest 2 / 3 / Pro over Link,
+Air Link, Virtual Desktop or Steam Link, HTC Vive, Pico, Bigscreen Beyond, Pimax, Windows Mixed Reality, Steam
+Frame. Eye-tracked mode needs a headset whose eye tracking reaches PC games (Steam Frame, and headsets that offer
+OpenXR eye gaze).
+
+**How much faster is it?** It depends on how much of a game's frame is pixel shading. The test scene went from 1.37
+to 0.25 ms per frame for the eye passes on the High preset; a real game measured 22% less. Press Ctrl+F9 in VR
+to switch it off and on, and the app shows the GPU time your game saves.
+
+**Will I see it?** On Low and Medium most people do not. On High, or with a wide field of view, the outer ring can
+look softer, and games with temporal anti-aliasing can shimmer at the ring edges. The debug tint in Settings shows
+where the rings are.
+
+**Is it safe? Can I get banned?** It never runs in games with EasyAntiCheat or BattlEye, or in VRChat. It changes
+one file in an OpenVR game's folder (`openvr_api.dll`, with the original kept beside it) and puts it back on
+Disable or uninstall. Do not use it in online competitive games.
+
+**Does it need an NVIDIA card?** No for Direct3D 12 games: NVIDIA RTX 20 and newer, AMD RX 6000 and newer and Intel
+Arc all work. Yes for Direct3D 11 games, where only NVIDIA offers variable rate shading.
+
+**Is it free?** Yes. Free and open source, no account, no telemetry, no paid tier.
+
 ## Build
 
 Windows 11 x64, Visual Studio 2022+ (C++ and MASM), CMake 3.24+, Rust stable, Python 3.13 (harness). The DLLs
@@ -107,6 +167,27 @@ Release zip: `installer\package.ps1`. Tests: `ctest --test-dir build -C Release`
 | `profiles/` | Anti-cheat and native-foveation lists |
 | `installer/` | Install, uninstall, packaging |
 
-## License
+## More PC VR tools from the same author
 
-GPL-3.0-or-later, see `LICENSE`. Third-party code and its licenses: `THIRD_PARTY_NOTICES.md`.
+Four free, open-source tools for PC VR by [EncidXVII](https://github.com/EncidXVII), with one look and one way of working:
+
+| | |
+|---|---|
+| **[WristXR](https://github.com/EncidXVII/WristXR)** | VR desktop overlay with wrist clock |
+| **[PortXR](https://github.com/EncidXVII/PortXR)** | Play flat PC games in VR |
+| **FoveaXR (this one)** | Foveated rendering for any PC VR game |
+| **[SweatXR](https://github.com/EncidXVII/SweatXR)** | VR fitness and calorie tracker |
+
+## License and credit
+
+Copyright © 2026 [EncidXVII](https://github.com/EncidXVII). FoveaXR is free software under the [GNU General Public License, version 3 or later](LICENSE)
+(`GPL-3.0-or-later`), with the attribution and naming terms in [NOTICE](NOTICE).
+
+- **You may** use it for anything, read the code, change it and share it.
+- **If you share it, or anything built from its code,** you must publish your source under the same license, keep
+  the copyright lines and the NOTICE file, and say clearly that yours is a changed version.
+- **You may not** put its code in a closed-source product, remove the credit, or call a changed version "FoveaXR" or
+  use its logo: see [TRADEMARKS.md](TRADEMARKS.md).
+
+Third-party components and their licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). To cite FoveaXR:
+[CITATION.cff](CITATION.cff).

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // SPEC 8: never inside anti-cheat games, games that foveate themselves, VRChat, or SteamVR's own processes.
 #include <windows.h>
 #include <sstream>
@@ -36,7 +39,7 @@ uint32_t safety_reason(const std::string& exe, uint32_t app_id, const std::wstri
                        const std::string& anticheat_list, const std::string& native_list) {
     static const char* never[] = {"vrchat.exe",     "vrcompositor.exe", "vrserver.exe",  "vrmonitor.exe",
                                   "vrdashboard.exe", "vrwebhelper.exe",  "vrstartup.exe", "steam.exe",
-                                  "steamwebhelper.exe", "foveatedvr.exe"};
+                                  "steamwebhelper.exe", "foveaxr.exe"};
     for (auto n : never)
         if (exe == n) return FOV_REASON_NEVER;
     if (listed(anticheat_list, exe, app_id)) return FOV_REASON_ANTICHEAT_LIST;

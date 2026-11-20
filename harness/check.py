@@ -1,3 +1,6 @@
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Quick foveation check: rate images bind on eye passes only, the rings follow the test gaze, the UI pass is untouched.
 
     python harness/check.py [--secondary]

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /* fov_core: the foveation core as a static library with a small C API, so other injectors can link it. */
 #ifndef FOV_CORE_H
 #define FOV_CORE_H
@@ -14,7 +17,7 @@ const char* fov_version(void);
 int fov_is_wine(void);
 
 /* One line per state change, never per frame. Goes to FOV_LOG_FILE if set (tests), else
- * %LOCALAPPDATA%\FoveatedVR\logs\<exe>-<yyyymmdd>.log; a file past 1 MB is moved to .old. */
+ * %LOCALAPPDATA%\FoveaXR\logs\<exe>-<yyyymmdd>.log; a file past 1 MB is moved to .old. */
 void fov_log(const char* fmt, ...);
 
 /* Maps the shared memory, creating it if nobody has yet; writes the header and default settings if no one has.
@@ -30,7 +33,7 @@ int fov_shm_write_gaze(const FovGaze* in);
 int fov_shm_claim_slot(void);
 void fov_shm_write_stats(int slot, const FovStats* in);
 
-/* Defaults for a preset (SPEC 3), and the app's %APPDATA%\FoveatedVR\settings.toml applied over Medium. */
+/* Defaults for a preset (SPEC 3), and the app's %APPDATA%\FoveaXR\settings.toml applied over Medium. */
 void fov_settings_default(FovSettings* out, uint32_t preset);
 void fov_settings_load(FovSettings* out);
 

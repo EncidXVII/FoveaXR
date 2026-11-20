@@ -1,3 +1,6 @@
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Runs one fixture under the SteamVR null driver and reports what happened.
 
     python harness/run.py xr-d3d11 [--frames 600] [--heavy 64] [--adapter N] [--layer] [--proxy] [--gaze U,V]
@@ -25,9 +28,9 @@ import windows
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 BIN = os.path.join(ROOT, "build", "Release")
 OUT = os.path.join(ROOT, "harness", "out")
-LAYER = "XR_APILAYER_FOVEATEDVR_core"
+LAYER = "XR_APILAYER_FOVEAXR_core"
 # Test-only layer, always loaded for OpenXR runs, listed last so it sits next to the runtime (see harness_layer.cpp).
-HARNESS_LAYER = "XR_APILAYER_FOVEATEDVR_harness"
+HARNESS_LAYER = "XR_APILAYER_FOVEAXR_harness"
 FIXTURES = {
     "openvr-d3d11": ("openvr", os.path.join(BIN, "fov_fixture_openvr_d3d11.exe"), []),
     "xr-d3d11": ("openxr", os.path.join(BIN, "fov_fixture_xr.exe"), ["--gfx", "d3d11"]),

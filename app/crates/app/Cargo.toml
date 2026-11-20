@@ -1,13 +1,13 @@
 [package]
 name = "fov-app"
-description = "FoveatedVR tray app"
+description = "FoveaXR tray app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "FoveatedVR"
+name = "FoveaXR"
 path = "src/main.rs"
 
 [dependencies]

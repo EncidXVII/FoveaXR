@@ -1,3 +1,6 @@
+; Copyright (C) 2026 EncidXVII
+; SPDX-License-Identifier: GPL-3.0-or-later
+
 ; Export stubs of the openvr_api.dll proxy. Each one jumps to the same export of the game's original DLL with every
 ; argument register untouched, so no signature is needed. The first call of any stub loads the original (outside
 ; DllMain, where loading a library could deadlock) through fov_proxy_resolve. Indices match exports.h.

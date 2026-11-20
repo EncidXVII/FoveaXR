@@ -1,4 +1,7 @@
-//! settings.toml in the config folder (%APPDATA%\FoveatedVR, or $XDG_CONFIG_HOME/foveatedvr): what the user chose,
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+//! settings.toml in the config folder (%APPDATA%\FoveaXR, or $XDG_CONFIG_HOME/foveaxr): what the user chose,
 //! saved on every change. The in-game core reads the same file when it starts before the app (and for the per-game
 //! off list); live changes reach games through shared memory.
 
@@ -80,7 +83,7 @@ impl AppSettings {
         };
         let games: Vec<String> = self.off_games.iter().map(|g| format!("\"{g}\"")).collect();
         format!(
-            "# FoveatedVR settings, written by the app.\nenabled = {}\nmode = \"{}\"\npreset = \"{preset}\"\ndebug_tint = {}\noff_games = [{}]\ntheme = {}\n",
+            "# FoveaXR settings, written by the app.\nenabled = {}\nmode = \"{}\"\npreset = \"{preset}\"\ndebug_tint = {}\noff_games = [{}]\ntheme = {}\n",
             self.enabled,
             if self.eye_tracked { "eye" } else { "fixed" },
             self.debug_tint,

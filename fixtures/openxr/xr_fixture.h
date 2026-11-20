@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 // OpenXR fixture: one app, three graphics backends, separate eye swapchains.
 #include <openxr/openxr.h>

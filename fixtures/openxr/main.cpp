@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include <windows.h>
 #include <cmath>
 #include "xr_fixture.h"

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // GPU check of the raw NVAPI VRS mechanism, outside any game: a per-pixel noise shader drawn with a rate image of
 // all 4x4 must come out in uniform 4x4 blocks. Local only (needs an NVIDIA GPU).
 #include <windows.h>

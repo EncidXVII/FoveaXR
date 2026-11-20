@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! The few Windows calls the app needs beyond the mapping; kept here, the one crate that may use unsafe.
 #![allow(unsafe_code)]
 

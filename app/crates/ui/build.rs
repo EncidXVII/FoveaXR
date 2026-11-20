@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! design-tokens.json (shared with the sibling apps) is the single source of colours, type, spacing and motion. It
 //! becomes the `Tokens` Slint global here, desktop sizes applied, so a value can never drift from the file.
 

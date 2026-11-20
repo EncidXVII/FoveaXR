@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! QA screenshots of every view, rendered offscreen with the software renderer:
 //!     cargo run -p fov-ui --example qa -- <out dir>
 //! Motion is off (reduced motion) so each picture shows the settled state.
@@ -42,7 +45,7 @@ fn sample() -> Vec<GameRow> {
         game(2, "Resonite", "OpenVR · played 2 months ago", "Updated", 3, "Re-enable"),
         busy,
         GameRow {
-            detail: "Anti-cheat found. FoveatedVR never runs here, so nothing it adds can get your account flagged."
+            detail: "Anti-cheat found. FoveaXR never runs here, so nothing it adds can get your account flagged."
                 .into(),
             ..game(4, "VRChat", "OpenVR", "Blocked", 2, "Why?")
         },

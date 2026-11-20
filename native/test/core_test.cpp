@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Unit tests for the core, gaze and backend rules that need no GPU. Exit code = number of failures.
 #include <cstdio>
 #include <cstring>

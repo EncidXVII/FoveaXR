@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 // What every fixture shares: arguments, frame constants, the UI rectangle, logging.
 #include <cstdarg>

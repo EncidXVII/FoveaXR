@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! The games list as the window shows it: each game's state, then search, filter, sort and grouping (games that
 //! will be foveated first). Pure, so the list rules are tested without a window.
 
@@ -90,7 +93,7 @@ fn row(id: usize, e: &Entry, s: &AppSettings, now: u64) -> Row {
         Some(Block::AntiCheat) => (
             "Blocked",
             2,
-            "Anti-cheat found. FoveatedVR never runs here, so nothing it adds can get your account flagged.",
+            "Anti-cheat found. FoveaXR never runs here, so nothing it adds can get your account flagged.",
             "Why?",
             false,
             false,
@@ -117,7 +120,7 @@ fn row(id: usize, e: &Entry, s: &AppSettings, now: u64) -> Row {
             State::Off | State::Unavailable => (
                 "Off",
                 1,
-                "OpenVR games need FoveatedVR placed in their folder once. Close the game, then Enable.",
+                "OpenVR games need FoveaXR placed in their folder once. Close the game, then Enable.",
                 "Enable",
                 true,
                 true,
@@ -125,7 +128,7 @@ fn row(id: usize, e: &Entry, s: &AppSettings, now: u64) -> Row {
             State::NeedsReenable => (
                 "Updated",
                 3,
-                "A game update replaced openvr_api.dll, so FoveatedVR is out. Enable again to put it back.",
+                "A game update replaced openvr_api.dll, so FoveaXR is out. Enable again to put it back.",
                 "Re-enable",
                 true,
                 true,

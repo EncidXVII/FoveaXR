@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /* Shared memory between the tray app (settings, forwarded gaze), the harness (test gaze) and every game process
  * (stats). Plain C so the Rust app (app/crates/shm) and the Python harness (harness/gaze.py) mirror it field for
  * field; all three check the offsets below in a unit test, so a change here must change all three.
@@ -9,7 +12,7 @@
 #define FOV_SHM_H
 #include <stdint.h>
 
-#define FOV_SHM_NAME L"Local\\FoveatedVR.v1"
+#define FOV_SHM_NAME L"Local\\FoveaXR.v1"
 #define FOV_SHM_MAGIC 0x31564F46u /* "FOV1" little endian */
 #define FOV_SHM_VERSION 1u
 #define FOV_SHM_SLOTS 8

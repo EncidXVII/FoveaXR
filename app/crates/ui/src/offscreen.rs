@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Renders Slint windows into RGBA buffers with the software renderer, for the QA screenshots
 //! (examples/qa.rs). Each `Surface` owns one window; only changed regions are repainted.
 

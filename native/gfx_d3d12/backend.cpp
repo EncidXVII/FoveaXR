@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // D3D12 VRS Tier 2: render-target descriptors are mapped to their resources when created; every bind on a command
 // list (OMSetRenderTargets, render passes) is classified; eye passes get the rate image, everything else none, and
 // nothing stays bound when a list closes (SPEC 5.2).

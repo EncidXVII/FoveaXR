@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 // D3D12 path (SPEC 5.2): VRS Tier 2 shading-rate images on every vendor that has them.
 #include <d3d12.h>

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! What differs between Windows and Linux: folders, Steam's location, the desktop's motion setting, revealing a file.
 
 use std::path::{Path, PathBuf};
@@ -11,20 +14,20 @@ fn xdg(var: &str, fallback: &str) -> Option<PathBuf> {
     env_path(var).or_else(|| env_path("HOME").map(|h| h.join(fallback)))
 }
 
-/// Settings and install records: %APPDATA%\FoveatedVR, or $XDG_CONFIG_HOME/foveatedvr.
+/// Settings and install records: %APPDATA%\FoveaXR, or $XDG_CONFIG_HOME/foveaxr.
 pub fn config_dir() -> Option<PathBuf> {
     #[cfg(windows)]
-    return env_path("APPDATA").map(|d| d.join("FoveatedVR"));
+    return env_path("APPDATA").map(|d| d.join("FoveaXR"));
     #[cfg(unix)]
-    return xdg("XDG_CONFIG_HOME", ".config").map(|d| d.join("foveatedvr"));
+    return xdg("XDG_CONFIG_HOME", ".config").map(|d| d.join("foveaxr"));
 }
 
-/// Logs (the in-game core writes them): %LOCALAPPDATA%\FoveatedVR, or $XDG_STATE_HOME/foveatedvr.
+/// Logs (the in-game core writes them): %LOCALAPPDATA%\FoveaXR, or $XDG_STATE_HOME/foveaxr.
 pub fn state_dir() -> Option<PathBuf> {
     #[cfg(windows)]
-    return env_path("LOCALAPPDATA").map(|d| d.join("FoveatedVR"));
+    return env_path("LOCALAPPDATA").map(|d| d.join("FoveaXR"));
     #[cfg(unix)]
-    return xdg("XDG_STATE_HOME", ".local/state").map(|d| d.join("foveatedvr"));
+    return xdg("XDG_STATE_HOME", ".local/state").map(|d| d.join("foveaxr"));
 }
 
 /// Where Export logs puts the zip: the desktop, else the home folder.
@@ -121,8 +124,8 @@ mod tests {
     #[test]
     fn wine_paths() {
         assert_eq!(
-            wine_path(Path::new("/home/u/.local/share/foveatedvr/fov_openxr_layer.json")),
-            r"Z:\home\u\.local\share\foveatedvr\fov_openxr_layer.json"
+            wine_path(Path::new("/home/u/.local/share/foveaxr/fov_openxr_layer.json")),
+            r"Z:\home\u\.local\share\foveaxr\fov_openxr_layer.json"
         );
     }
 

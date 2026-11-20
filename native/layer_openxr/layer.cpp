@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // OpenXR API layer (SPEC 6.1): learns the eye swapchains, layout and FOV, reads eye gaze (XR_EXT_eye_gaze_interaction
 // through our own action set, else the shared-memory test source), and hands each frame to the core; the graphics
 // backend found at xrCreateSession foveates the eye passes. Inactive processes get pure pass-through.

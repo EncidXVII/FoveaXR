@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Per-game OpenXR on Linux: a Proton game reads the registry of its own Wine prefix, so our implicit layer is
 //! registered there (HKCU\Software\Khronos\OpenXR\1\ApiLayers\Implicit in steamapps/compatdata/<appid>/pfx/user.reg),
 //! pointing at the manifest through Wine's Z: drive.
@@ -234,7 +237,7 @@ pub fn disable_all(manifest: &str) -> Result<(), String> {
 mod tests {
     use super::*;
 
-    const NAME: &str = r"Z:\home\u\.local\share\foveatedvr\fov_openxr_layer.json";
+    const NAME: &str = r"Z:\home\u\.local\share\foveaxr\fov_openxr_layer.json";
     const REG: &str = "WINE REGISTRY Version 2\n;; All keys relative to \\\\User\\\\S-1-5-21-0-0-0-1000\n\n#arch=win64\n\n[Software\\\\Wine] 1700000000\n#time=1da0000000000000\n\"Version\"=\"win10\"\n";
 
     #[test]
@@ -243,9 +246,7 @@ mod tests {
         assert!(created);
         assert!(added.contains("[Software\\\\Khronos\\\\OpenXR\\\\1\\\\ApiLayers\\\\Implicit] 1732000000"));
         assert!(
-            added.contains(
-                "\"Z:\\\\home\\\\u\\\\.local\\\\share\\\\foveatedvr\\\\fov_openxr_layer.json\"=dword:00000000"
-            )
+            added.contains("\"Z:\\\\home\\\\u\\\\.local\\\\share\\\\foveaxr\\\\fov_openxr_layer.json\"=dword:00000000")
         );
         assert_eq!(remove_value(&added, NAME, true), REG);
         // Adding twice changes nothing.

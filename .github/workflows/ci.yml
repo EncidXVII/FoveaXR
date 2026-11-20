@@ -53,7 +53,7 @@ jobs:
         with:
           name: windows-dlls
           path: windows-dlls
-      - run: sh installer/linux/package.sh target/release/FoveatedVR windows-dlls
+      - run: sh installer/linux/package.sh target/release/FoveaXR windows-dlls
       - uses: actions/upload-artifact@v4
         with:
           name: linux-tarball

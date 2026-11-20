@@ -1,3 +1,6 @@
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Third-party code, pinned by hash (licenses in THIRD_PARTY_NOTICES.md). SOURCE_SUBDIR none: headers and prebuilt
 # libraries only, their own CMake projects are not added.
 include(FetchContent)

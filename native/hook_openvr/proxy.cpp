@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // openvr_api.dll proxy (SPEC 6.2): every export forwards to the game's original, renamed openvr_api.fov-orig.dll
 // beside it. In an active process the compositor the game gets is wrapped: WaitGetPoses returning starts a frame,
 // Submit tells which texture is which eye and installs the graphics backend, the second eye ends the frame.

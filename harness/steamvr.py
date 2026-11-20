@@ -1,3 +1,6 @@
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """SteamVR null-driver session: headless HMD for automated runs, user settings restored afterwards."""
 import contextlib
 import glob

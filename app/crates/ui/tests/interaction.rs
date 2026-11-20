@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Input on the real component, offscreen: the mouse wheel / touchpad scrolls every view taller than the window (the
 //! picture must move), and the games list's keyboard search works. One test: the platform is set once per process.
 

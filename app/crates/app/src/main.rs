@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // No console window when started from the Start menu or autostart.
 #![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
 

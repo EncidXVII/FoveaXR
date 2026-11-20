@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=FoveatedVR
+Name=FoveaXR
 Comment=Foveated rendering for Steam VR games under Proton
 Exec=@EXEC@
-Icon=foveatedvr
+Icon=foveaxr
 Categories=Game;Utility;

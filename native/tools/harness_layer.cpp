@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // fov_harness_layer: test-only OpenXR layer, loaded by the harness next to the runtime. The SteamVR null driver
 // has no display adapter, so the runtime reports LUID 0 and cannot name a Vulkan device; apps that look their GPU
 // up by LUID (hello_xr) or ask for the Vulkan device then fail. This layer answers with the adapter at index

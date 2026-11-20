@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 // The per-process foveation state, shared by the VR API integration (OpenXR layer, OpenVR proxy) and the graphics
 // backends. The VR side feeds frames, FOVs, eye images and gaze; the backends ask which render-target binds to

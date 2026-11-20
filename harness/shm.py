@@ -1,3 +1,6 @@
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The shared memory every game process reads: test gaze source (SPEC 7, source 5) and test settings.
 
 Mirrors native/include/fov_shm.h; tests/test_shm.py checks the offsets against the numbers the C++ and Rust sides
@@ -7,7 +10,7 @@ import ctypes
 import mmap
 import os
 
-NAME = "Local\\FoveatedVR.v1"
+NAME = "Local\\FoveaXR.v1"
 MAGIC = 0x31564F46
 VERSION = 1
 SLOTS = 8
@@ -74,7 +77,7 @@ class Writer:
     unless settings are given: then this run's settings replace the app's (tests only)."""
 
     def __init__(self, path=None):
-        """path: a file to map instead of the named section, as the Linux app maps /dev/shm/FoveatedVR.v1 (the core
+        """path: a file to map instead of the named section, as the Linux app maps /dev/shm/FoveaXR.v1 (the core
         maps the same file through Wine's Z: drive, or the file FOV_SHM_FILE names)."""
         size = ctypes.sizeof(Shm)
         if path:

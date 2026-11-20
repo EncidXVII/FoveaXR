@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // D3D11 + NVAPI: hooks OMSetRenderTargets(*) on the immediate context; eye passes get a shading-rate resource view
 // and the per-viewport lookup table, everything else gets VRS off. Deferred contexts stay unfoveated (SPEC 5.1).
 #include <d3d11_1.h>

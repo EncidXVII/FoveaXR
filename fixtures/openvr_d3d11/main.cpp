@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // OpenVR D3D11 fixture: separate eye textures submitted to IVRCompositor, like most OpenVR games.
 #include <d3d11.h>
 #include <openvr.h>

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Where the core finds the app's files. On Windows: the user's AppData folders. Inside Wine/Proton the game sees a
 // Windows profile of its own prefix, but the app runs natively on Linux, so the shared files live in the Linux
 // home's XDG folders, reached through Wine's Z: drive (the Linux root).
@@ -42,15 +45,15 @@ namespace fov {
 std::wstring host_dir(Host kind) {
     if (fov_is_wine()) {
         switch (kind) {
-        case Host::Config: return under(xdg(L"XDG_CONFIG_HOME", L".config"), L"\\foveatedvr");
-        case Host::State: return under(xdg(L"XDG_STATE_HOME", L".local/state"), L"\\foveatedvr");
-        case Host::Install: return under(xdg(L"XDG_DATA_HOME", L".local/share"), L"\\foveatedvr");
+        case Host::Config: return under(xdg(L"XDG_CONFIG_HOME", L".config"), L"\\foveaxr");
+        case Host::State: return under(xdg(L"XDG_STATE_HOME", L".local/state"), L"\\foveaxr");
+        case Host::Install: return under(xdg(L"XDG_DATA_HOME", L".local/share"), L"\\foveaxr");
         }
     }
     switch (kind) {
-    case Host::Config: return under(env(L"APPDATA"), L"\\FoveatedVR");
-    case Host::State: return under(env(L"LOCALAPPDATA"), L"\\FoveatedVR");
-    case Host::Install: return under(env(L"LOCALAPPDATA"), L"\\Programs\\FoveatedVR");
+    case Host::Config: return under(env(L"APPDATA"), L"\\FoveaXR");
+    case Host::State: return under(env(L"LOCALAPPDATA"), L"\\FoveaXR");
+    case Host::Install: return under(env(L"LOCALAPPDATA"), L"\\Programs\\FoveaXR");
     }
     return L"";
 }

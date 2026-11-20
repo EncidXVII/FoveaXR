@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 // Vulkan path (SPEC 5.3): VK_KHR_fragment_shading_rate attachments, on every vendor that exposes them.
 #include <cstdint>

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Shared memory between the tray app and every game process: a field-for-field mirror of
 //! `native/include/fov_shm.h` (the C header is the source of truth; the offset test below checks the same numbers
 //! the C++ and Python mirrors check).
@@ -5,7 +8,7 @@
 //! The app writes the global settings (and forwarded OSC gaze); games write their slot's stats. Each block has a
 //! seqlock counter: odd while being written.
 
-pub const NAME: &str = "Local\\FoveatedVR.v1";
+pub const NAME: &str = "Local\\FoveaXR.v1";
 pub const MAGIC: u32 = 0x3156_4F46;
 pub const VERSION: u32 = 1;
 pub const SLOTS: usize = 8;

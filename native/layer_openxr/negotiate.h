@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 // OpenXR loader negotiation and instance-creation chaining, shared by the product layer and the harness layer.
 #include <openxr/openxr.h>

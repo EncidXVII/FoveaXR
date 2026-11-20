@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 // Gaze sources (SPEC 7). This phase has the shared-memory source, which carries both the harness's test gaze and the
 // app's forwarded OSC gaze; the OpenXR and OpenVR sources join it with their VR API paths.

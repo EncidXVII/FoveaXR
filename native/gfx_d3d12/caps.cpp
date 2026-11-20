@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "fov_d3d12.h"
 
 namespace fov::d3d12 {

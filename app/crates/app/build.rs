@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Puts the icons into the Windows executable. Group 1 is the app icon (Explorer, taskbar, Alt+Tab); 2 and 3 are
 //! the tray icon for dark and light taskbars. They come from packaging/brand (drawn by marks.py) and go in as a
 //! compiled resource file, which the MSVC linker takes as an input, so no resource compiler is needed.

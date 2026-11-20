@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 /* Vtable slots from the SDK's C declarations, so no index is typed by hand. */
 #pragma warning(disable : 4201) /* the SDK headers in C mode use nameless unions */
 #define CINTERFACE

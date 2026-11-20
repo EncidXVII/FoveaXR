@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 // The fixture scene on D3D11: eye pass (colour + depth bound) then UI pass (colour only), into any eye-sized RTV.
 #include <d3d11.h>

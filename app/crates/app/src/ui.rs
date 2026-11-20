@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! The window: settings auto-saved and pushed to every game live, the games list with per-game enable, the running
 //! game's GPU saving, Export logs. Slow work (scanning, file moves, the logs zip) runs on worker threads and reports
 //! back through a channel the UI timer drains.
@@ -44,7 +47,7 @@ fn export_logs() -> Result<PathBuf, String> {
         return Err("no logs yet: start a VR game first".into());
     }
     // Windows' tar writes zips; GNU tar does not, so Linux gets a gzipped tar.
-    let name = if cfg!(windows) { "FoveatedVR-logs.zip" } else { "FoveatedVR-logs.tar.gz" };
+    let name = if cfg!(windows) { "FoveaXR-logs.zip" } else { "FoveaXR-logs.tar.gz" };
     let out = crate::platform::desktop_dir().ok_or("no home folder")?.join(name);
     let mut cmd = std::process::Command::new("tar");
     #[cfg(windows)]

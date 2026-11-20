@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The tray app's window: a sidebar and three pages, like the sibling apps' desktop windows.
 import { Tokens, Mode } from "@tokens";
 import "fonts/Anton-Regular.ttf";
@@ -547,7 +550,7 @@ component GamesPage inherits FocusScope {
                     horizontal-alignment: center;
                     wrap: word-wrap;
                     text: root.state == 1 ? "Games from other stores still get foveated if they use OpenXR."
-                        : root.state == 2 ? "Install a VR game and reopen FoveatedVR. OpenXR games are foveated without being listed."
+                        : root.state == 2 ? "Install a VR game and reopen FoveaXR. OpenXR games are foveated without being listed."
                         : root.state == 3 ? "Try another filter or a shorter search." : "";
                 }
                 if root.state == 3 && (root.search != "" || root.filter != 0): HorizontalLayout {
@@ -645,7 +648,7 @@ component SettingsPage inherits VerticalLayout {
         }
     }
     Caption {
-        text: "FoveatedVR " + root.version + " · GPL-3.0 · no telemetry, no network";
+        text: "FoveaXR " + root.version + " · GPL-3.0 · no telemetry, no network";
         color: Tokens.ink3;
     }
 }
@@ -681,7 +684,7 @@ export component MainWindow inherits Window {
     callback sort-picked(int);
     callback game-action(int);
 
-    title: "FoveatedVR";
+    title: "FoveaXR";
     icon: @image-url("../../../../packaging/brand/foveaxr-256.png");
     preferred-width: 880px;
     preferred-height: 640px;
@@ -734,7 +737,7 @@ export component MainWindow inherits Window {
                     }
                     if !root.narrow: Text {
                         vertical-alignment: center;
-                        text: "FOVEATEDVR";
+                        text: "FOVEAXR";
                         color: Tokens.ink;
                         font-size: Tokens.type-brand;
                         font-family: Tokens.font-display;

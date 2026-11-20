@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 // D3D11 and D3D12 fixture helpers: adapter choice and runtime shader compilation of scene.hlsl.
 #include <windows.h>

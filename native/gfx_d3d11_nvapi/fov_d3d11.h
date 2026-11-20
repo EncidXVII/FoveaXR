@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 // D3D11 path (SPEC 5.1): NVIDIA only, through NVAPI variable pixel rate shading (Turing and newer).
 #include <d3d11.h>

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include <volk.h>
 #define XR_USE_GRAPHICS_API_VULKAN
 #include <openxr/openxr.h>
