@@ -1,4 +1,7 @@
-<img src="packaging/brand/foveaxr-mark.svg" width="72" alt="FoveaXR logo">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="packaging/brand/foveaxr-mark.svg">
+  <img src="packaging/brand/foveaxr-mark-ink.svg" width="72" alt="FoveaXR logo">
+</picture>
 
 # FoveaXR: foveated rendering for any PC VR game
 
