@@ -33,5 +33,6 @@ $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item $zip }
 Compress-Archive -Path $out -DestinationPath $zip
 $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
-Set-Content -Encoding ascii "$zip.sha256" "$hash  $name.zip"
+# LF, not CRLF: `sha256sum -c` on Linux reads a CR as part of the file name.
+[IO.File]::WriteAllText("$zip.sha256", "$hash  $name.zip`n")
 Write-Host "$zip`n$hash"
