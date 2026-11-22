@@ -234,9 +234,35 @@ component GameLine inherits Rectangle {
     in property <bool> expanded;
     callback act();
     callback toggle();
+    // Asks the list to scroll all of this row into view: when it becomes the selected one, and when it opens.
+    callback reveal();
+    changed selected => {
+        if self.selected {
+            root.reveal();
+        }
+    }
+    changed expanded => {
+        if self.expanded {
+            root.reveal();
+            opened.running = true;
+        }
+    }
+    // Once more when it has opened: the list can only scroll as far as its rows reach, and this one was still growing.
+    opened := Timer {
+        interval: Motion.slow + 50ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            if root.expanded {
+                root.reveal();
+            }
+        }
+    }
     property <length> compact: 56px;
+    // The height it settles at (the list scrolls a row into view by it while the row is still opening).
+    out property <length> settled: root.game.header ? 36px : root.expanded ? root.compact + details.preferred-height : root.compact;
     // Opens to show why a game is in the state it is; eases open and shut from wherever it is.
-    property <length> h: root.game.header ? 36px : root.expanded ? root.compact + details.preferred-height : root.compact;
+    property <length> h: root.settled;
     animate h {
         duration: Motion.slow;
         easing: cubic-bezier(0.23, 1, 0.32, 1);
@@ -341,21 +367,74 @@ component GamesPage inherits FocusScope {
     callback filter-picked(int);
     callback sort-picked(int);
     callback act(int);
+    // The window's margins around this page: the wheel scrolls the list from there too.
+    in property <length> margin-left;
+    in property <length> margin-top;
+    in property <length> margin-right;
+    in property <length> margin-bottom;
+    // Where a wheel turn outside the list is taking it: turns in quick succession add up.
+    property <length> wheel-goal;
 
     function move(step: int) {
         let n = root.games.length;
         let first = root.selected + step;
-        // Skip group headers.
+        // Skip group headers. The row scrolls itself into view when it becomes the selected one.
         let i = first >= 0 && first < n && root.games[first].header ? first + step : first;
         if i >= 0 && i < n {
             root.selected = i;
-            // Into view: rows are 56 px, headers 36, plus the open row's details.
-            let top = i * 56px + 8px;
-            if top < list.content-y * -1 {
-                list.content-y = -top;
-            } else if top + 56px > list.height - list.content-y {
-                list.content-y = list.height - top - 56px;
+        }
+    }
+
+    // Scrolls the least that brings a row (its top and height in the list's content) into view.
+    function reveal(top: length, height: length) {
+        if top < -list.content-y {
+            list.scroll-to({ x: 0px, y: top }, ScrollBehavior.instant);
+        } else if top + height > list.height - list.content-y {
+            list.scroll-to({ x: 0px, y: top + height - list.height }, ScrollBehavior.instant);
+        }
+    }
+
+    function wheel(dy: length) {
+        let from = wheel-rest.running ? root.wheel-goal : -list.content-y;
+        root.wheel-goal = clamp(from - dy, 0px, max(0px, list.content-height - list.height));
+        wheel-rest.running = false;
+        wheel-rest.running = true;
+        list.scroll-to({ x: 0px, y: root.wheel-goal }, Mode.reduce-motion ? ScrollBehavior.instant : ScrollBehavior.smooth);
+    }
+
+    // Another search, filter or order is another list: it starts at its top. (Rows that only change state, after a
+    // click on a row's button, are updated in place and the list stays where it is.)
+    changed search => {
+        list.scroll-to({ x: 0px, y: 0px }, ScrollBehavior.instant);
+    }
+    changed filter => {
+        list.scroll-to({ x: 0px, y: 0px }, ScrollBehavior.instant);
+    }
+    changed sort => {
+        list.scroll-to({ x: 0px, y: 0px }, ScrollBehavior.instant);
+    }
+
+    wheel-rest := Timer {
+        interval: 300ms;
+        running: false;
+        triggered => {
+            self.running = false;
+        }
+    }
+
+    // Behind the page and as large as the page with its margins: the wheel scrolls the list from anywhere on it
+    // (the title, the filter bar, the empty side of a maximised window), not only with the pointer on a row.
+    TouchArea {
+        x: -root.margin-left;
+        y: -root.margin-top;
+        width: root.width + root.margin-left + root.margin-right;
+        height: root.height + root.margin-top + root.margin-bottom;
+        scroll-event(event) => {
+            if event.delta-y == 0px {
+                return reject;
             }
+            root.wheel(event.delta-y);
+            accept
         }
     }
 
@@ -507,6 +586,10 @@ component GamesPage inherits FocusScope {
                         game: game;
                         selected: i == root.selected;
                         expanded: i == root.expanded;
+                        // Its place in the column is its place in the list's content.
+                        reveal => {
+                            root.reveal(self.y, self.settled);
+                        }
                         toggle => {
                             root.selected = i;
                             root.expanded = root.expanded == i ? -1 : i;
@@ -519,19 +602,48 @@ component GamesPage inherits FocusScope {
                     }
                 }
             }
-            if list.content-height > list.height + 1px: Rectangle {
-                x: parent.width - 4px;
-                width: 4px;
-                border-radius: 2px;
-                background: Tokens.edge;
-                height: max(32px, list.height * list.height / list.content-height);
-                y: (list.height - self.height) * (-list.content-y) / (list.content-height - list.height);
-            }
             // Scroll edge: rows fade out under the filter bar instead of being cut off hard, only once scrolled.
             if list.content-y < -1px: Rectangle {
                 y: 0;
                 height: 20px;
                 background: @linear-gradient(180deg, Tokens.bg 0%, transparent 100%);
+            }
+            // Scrollbar: a thin thumb in a strip wide enough to take the mouse. Dragging moves the list; a press on
+            // the track brings the thumb under the pointer first.
+            if list.content-height > list.height + 1px: bar := TouchArea {
+                property <length> thumb: max(32px, list.height * list.height / list.content-height);
+                property <length> track: self.height - self.thumb;
+                property <length> span: list.content-height - list.height;
+                // The list's position when the drag began.
+                property <length> held;
+                x: parent.width - self.width;
+                width: 12px;
+                pointer-event(event) => {
+                    if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                        if self.pressed-y < knob.y || self.pressed-y > knob.y + knob.height {
+                            list.scroll-to({ x: 0px, y: clamp(self.pressed-y - self.thumb / 2, 0px, self.track) * self.span / self.track }, ScrollBehavior.instant);
+                        }
+                        self.held = list.content-y;
+                    }
+                }
+                moved => {
+                    if self.pressed {
+                        list.scroll-to({ x: 0px, y: (self.mouse-y - self.pressed-y) * self.span / self.track - self.held }, ScrollBehavior.instant);
+                    }
+                }
+                knob := Rectangle {
+                    property <bool> lit: bar.has-hover || bar.pressed;
+                    x: parent.width - self.width;
+                    width: self.lit ? 6px : 4px;
+                    border-radius: self.width / 2;
+                    background: bar.pressed ? Tokens.ink2 : self.lit ? Tokens.ink3 : Tokens.edge;
+                    height: bar.thumb;
+                    y: bar.track * (-list.content-y) / bar.span;
+                    animate width, background {
+                        duration: Motion.fast;
+                        easing: ease-out;
+                    }
+                }
             }
             // Empty states: say why the list is empty and what to do about it.
             if root.state != 3 || root.games.length == 0: VerticalLayout {
@@ -570,6 +682,55 @@ component GamesPage inherits FocusScope {
     }
 }
 
+// A row that opens a web page in the browser.
+component LinkRow inherits Row {
+    in property <string> url;
+    callback open(string);
+    clickable: true;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => {
+        root.open(root.url);
+    }
+    clicked => {
+        root.open(root.url);
+    }
+    VerticalLayout {
+        alignment: center;
+        Icon {
+            d: Icons.external;
+            color: root.hovered ? Tokens.ink : Tokens.ink2;
+        }
+    }
+}
+
+// A word that opens a web page, for several links on one row.
+component Link inherits Rectangle {
+    in property <string> text;
+    in property <string> url;
+    callback open(string);
+    min-width: label.preferred-width;
+    min-height: label.preferred-height;
+    horizontal-stretch: 0;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => {
+        root.open(root.url);
+    }
+    label := Text {
+        text: root.text;
+        color: hit.has-hover ? Tokens.ink : Tokens.ink2;
+        font-size: Tokens.type-body;
+        font-family: Tokens.font-body;
+        vertical-alignment: center;
+    }
+    hit := Hit {
+        clicked => {
+            root.open(root.url);
+        }
+    }
+}
+
 component SettingsPage inherits VerticalLayout {
     in-out property <bool> tint;
     in property <string> version;
@@ -577,6 +738,7 @@ component SettingsPage inherits VerticalLayout {
     callback changed();
     callback theme-picked(int);
     callback export-logs();
+    callback open-url(string);
     spacing: Tokens.space-3;
     alignment: start;
     Head {
@@ -647,9 +809,70 @@ component SettingsPage inherits VerticalLayout {
             }
         }
     }
-    Caption {
-        text: "FoveaXR " + root.version + " · GPL-3.0 · no telemetry, no network";
-        color: Tokens.ink3;
+    SectionHead {
+        text: "About";
+    }
+    Group {
+        Row {
+            label: "FoveaXR " + root.version;
+            sub: "Foveated rendering for any PC VR game";
+        }
+        LinkRow {
+            divider: true;
+            label: "Report a problem";
+            sub: "Export logs above and attach the zip to your report";
+            url: "https://github.com/EncidXVII/FoveaXR/issues/new/choose";
+            open(url) => {
+                root.open-url(url);
+            }
+        }
+        LinkRow {
+            divider: true;
+            label: "Guide";
+            sub: "everyvr.net/foveaxr";
+            url: "https://everyvr.net/foveaxr";
+            open(url) => {
+                root.open-url(url);
+            }
+        }
+        Row {
+            divider: true;
+            label: "Made by EncidXVII";
+            HorizontalLayout {
+                spacing: Tokens.space-4;
+                alignment: end;
+                Link {
+                    text: "GitHub";
+                    url: "https://github.com/EncidXVII";
+                    open(url) => {
+                        root.open-url(url);
+                    }
+                }
+                Link {
+                    text: "Threads";
+                    url: "https://www.threads.com/@encidxvii";
+                    open(url) => {
+                        root.open-url(url);
+                    }
+                }
+                Link {
+                    text: "X";
+                    url: "https://x.com/MykolaOP";
+                    open(url) => {
+                        root.open-url(url);
+                    }
+                }
+            }
+        }
+        LinkRow {
+            divider: true;
+            label: "Licence";
+            sub: "GPL-3.0, free and open source · no telemetry, no network";
+            url: "https://github.com/EncidXVII/FoveaXR/blob/main/LICENSE";
+            open(url) => {
+                root.open-url(url);
+            }
+        }
     }
 }
 
@@ -678,6 +901,7 @@ export component MainWindow inherits Window {
     in property <int> toast-count;
     callback changed();
     callback export-logs();
+    callback open-url(string);
     callback theme-picked(int);
     callback search-edited(string);
     callback filter-picked(int);
@@ -797,6 +1021,10 @@ export component MainWindow inherits Window {
                         init => {
                             self.focus();
                         }
+                        margin-left: page.padding-left;
+                        margin-top: page.padding-top;
+                        margin-right: page.padding-right;
+                        margin-bottom: page.padding-bottom;
                         games: root.games;
                         state: root.games-state;
                         note: root.games-note;
@@ -829,6 +1057,9 @@ export component MainWindow inherits Window {
                         }
                         export-logs => {
                             root.export-logs();
+                        }
+                        open-url(url) => {
+                            root.open-url(url);
                         }
                     }
                 }

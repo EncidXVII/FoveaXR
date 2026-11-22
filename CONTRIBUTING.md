@@ -5,7 +5,7 @@ Thanks for helping. The most useful contributions right now, in order:
 1. **Game reports.** Play a game for a few minutes with FoveaXR on, press Ctrl+F9 twice to measure, and open an
    issue with the game, its graphics API, your GPU and headset, the saving the app shows, and the logs zip
    (Settings > Export logs). Reports of games where nothing is saved are as useful as the good ones.
-2. **Headsets with eye tracking** and **Linux with Proton**: neither has been tested in a headset yet.
+2. **Headsets with eye tracking** and **Linux with Proton**: both are experimental and require more testing.
 3. **Profiles**: games with anti-cheat or their own foveated rendering that the lists in `profiles/` miss.
 4. **Code**: start with an issue, so the approach is agreed before you write it.
 

@@ -20,6 +20,9 @@ pub struct Game {
     /// 64-bit openvr_api.dll files (the proxy is 64-bit only).
     pub openvr: Vec<PathBuf>,
     pub openxr: bool,
+    /// Its only OpenXR loader came with a VR mod (a BepInEx plugin, PortXR): a flat game played in VR through the mod.
+    /// The layer runs there as in any OpenXR game, so it is listed, and can be turned off, like one.
+    pub vr_mod: bool,
     /// Lowercase exe names in the game's top two folder levels.
     pub exes: Vec<String>,
     pub block: Option<Block>,
@@ -114,33 +117,53 @@ fn has_anticheat(dir: &Path) -> bool {
     names(dir).iter().any(|(n, is_dir)| hit(n) || (*is_dir && names(&dir.join(n)).iter().any(|(m, _)| hit(m))))
 }
 
-/// The runtime DLLs and exes of one game folder; a bounded walk, big games have many files.
+/// The runtime DLLs and exes of one game folder. Folder by folder, the nearest first: the DLLs sit near the top, so
+/// the bound on how much is read (big games have many files) cuts deep data and never them. Deepest first, a game
+/// with 130,000 files ran out before its `bin\win64` was read.
 fn inspect(dir: &Path, game: &mut Game) {
-    let mut stack = vec![(dir.to_path_buf(), 0)];
+    let mut queue = std::collections::VecDeque::from([(dir.to_path_buf(), 0)]);
     let mut visited = 0;
-    while let Some((d, depth)) = stack.pop() {
+    let (mut own, mut modded) = (false, false);
+    'walk: while let Some((d, depth)) = queue.pop_front() {
         let Ok(entries) = std::fs::read_dir(&d) else { continue };
-        for e in entries.flatten() {
+        let entries: Vec<_> = entries.flatten().collect();
+        // A loader under BepInEx, or in or beside a PortXR folder, came with a mod that plays a flat game in VR.
+        let folder = d.strip_prefix(dir).unwrap_or(&d).to_string_lossy().to_lowercase();
+        let mod_folder = folder.contains("bepinex")
+            || folder.contains("portxr")
+            || entries.iter().any(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case("portxr"));
+        for e in entries {
             visited += 1;
             if visited > 50_000 {
-                return;
+                break 'walk;
             }
             let p = e.path();
             let name = e.file_name().to_string_lossy().to_lowercase();
             if p.is_dir() {
                 if depth < 7 {
-                    stack.push((p, depth + 1));
+                    queue.push_back((p, depth + 1));
                 }
             } else if name == "openvr_api.dll" && is_x64(&p) {
                 game.openvr.push(p);
-            } else if name == "openxr_loader.dll" && !d.to_string_lossy().to_lowercase().contains("bepinex") {
-                // A loader under BepInEx belongs to a mod that brings VR to a flat game, not to the game.
-                game.openxr = true;
+            } else if name == "openxr_loader.dll" {
+                if mod_folder {
+                    modded = true;
+                } else {
+                    own = true;
+                }
             } else if depth <= 1 && name.ends_with(".exe") && !name.contains("crash") && !name.starts_with("unins") {
                 game.exes.push(name);
             }
         }
     }
+    game.openxr = own || modded;
+    game.vr_mod = modded && !own;
+}
+
+/// App ids Steam itself lists as VR overlays (`steam.overlay.<id>` in its config\steamapps.vrmanifest): tools drawn
+/// over games (a desktop view, body tracking), with no eye passes to foveate.
+fn overlay_ids(manifest: &str) -> Vec<u32> {
+    manifest.split("\"steam.overlay.").skip(1).filter_map(|rest| rest.split('"').next()?.parse().ok()).collect()
 }
 
 pub enum Scan {
@@ -156,6 +179,12 @@ pub fn scan(profiles: &Profiles) -> Scan {
     if roots.is_empty() {
         return Scan::NoSteam;
     }
+    let overlays: Vec<u32> = roots
+        .iter()
+        .flat_map(|r| {
+            overlay_ids(&std::fs::read_to_string(r.join("config").join("steamapps.vrmanifest")).unwrap_or_default())
+        })
+        .collect();
     let mut libs: Vec<PathBuf> = Vec::new();
     for lib in roots.iter().flat_map(|r| libraries(r)) {
         let lib = lib.canonicalize().unwrap_or(lib);
@@ -178,14 +207,23 @@ pub fn scan(profiles: &Profiles) -> Scan {
                 continue;
             };
             let app_id = id.parse().unwrap_or(0);
-            if SKIP.contains(&app_id) {
+            if SKIP.contains(&app_id) || overlays.contains(&app_id) {
                 continue;
             }
             let dir = apps.join("common").join(install);
             let last_played = field("LastPlayed").and_then(|v| v.parse().ok()).unwrap_or(0);
             let prefix = apps.join("compatdata").join(id.as_str()).join("pfx");
-            let mut game =
-                Game { app_id, name, last_played, openvr: vec![], openxr: false, exes: vec![], block: None, prefix };
+            let mut game = Game {
+                app_id,
+                name,
+                last_played,
+                openvr: vec![],
+                openxr: false,
+                vr_mod: false,
+                exes: vec![],
+                block: None,
+                prefix,
+            };
             inspect(&dir, &mut game);
             if game.openvr.is_empty() && !game.openxr {
                 continue;
@@ -224,6 +262,7 @@ mod tests {
             last_played: 0,
             openvr: vec![],
             openxr: true,
+            vr_mod: false,
             exes: vec![exe.into()],
             block: None,
             prefix: PathBuf::new(),
@@ -231,5 +270,59 @@ mod tests {
         assert!(l.has(&game(438_100, "x.exe")));
         assert!(l.has(&game(1, "vrchat.exe")));
         assert!(!l.has(&game(1, "other.exe")));
+    }
+
+    fn inspected(files: &[&str]) -> Game {
+        let dir = std::env::temp_dir().join(format!("fov-inspect-{}-{}", std::process::id(), files.len()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for f in files {
+            let p = dir.join(f);
+            let _ = std::fs::create_dir_all(p.parent().unwrap_or(&dir));
+            let _ = std::fs::write(p, b"");
+        }
+        let mut game = Game {
+            app_id: 1,
+            name: String::new(),
+            last_played: 0,
+            openvr: vec![],
+            openxr: false,
+            vr_mod: false,
+            exes: vec![],
+            block: None,
+            prefix: PathBuf::new(),
+        };
+        inspect(&dir, &mut game);
+        let _ = std::fs::remove_dir_all(&dir);
+        game
+    }
+
+    #[test]
+    fn a_vr_mod_makes_a_flat_game_an_openxr_game() {
+        // Unity through BepInEx, Unreal with the loader beside a PortXR folder, Godot inside one.
+        let unity = inspected(&["Game.exe", "BepInEx/plugins/PortXR/openxr_loader.dll"]);
+        assert!(unity.openxr && unity.vr_mod && unity.exes == ["game.exe"]);
+        let unreal =
+            inspected(&["Game/Binaries/Win64/openxr_loader.dll", "Game/Binaries/Win64/PortXR/portxr.log", "a"]);
+        assert!(unreal.openxr && unreal.vr_mod);
+        let godot = inspected(&["PortXR/openxr_loader.dll", "a", "b", "c"]);
+        assert!(godot.openxr && godot.vr_mod);
+        // A loader of the game's own makes it a VR game, with or without a mod beside it.
+        let own = inspected(&[
+            "G_Data/Plugins/x86_64/openxr_loader.dll",
+            "BepInEx/plugins/PortXR/openxr_loader.dll",
+            "a",
+            "b",
+        ]);
+        assert!(own.openxr && !own.vr_mod);
+        let flat = inspected(&["Game.exe", "a", "b", "c", "d", "e"]);
+        assert!(!flat.openxr && !flat.vr_mod);
+    }
+
+    #[test]
+    fn steam_names_the_overlays() {
+        let manifest = r#"{"applications":[{"app_key":"steam.app.438100"},{"app_key":"steam.overlay.1173510"},
+            {"app_key": "steam.overlay.2370570", "launch_type": "url"}]}"#;
+        assert_eq!(overlay_ids(manifest), [1_173_510, 2_370_570]);
+        assert!(overlay_ids("").is_empty());
     }
 }

@@ -26,7 +26,10 @@
 namespace {
 constexpr const char* kEyeGazeExt = "XR_EXT_eye_gaze_interaction";
 constexpr const char* kEyeProfile = "/interaction_profiles/ext/eye_gaze_interaction";
-constexpr int kAttachAloneAfter = 120;  // frames without the app attaching action sets
+// Frames without the app making action sets before ours is attached alone. A session takes one attach: a game
+// that makes its own later than this loses its input for the session, so the wait is long (some seconds of Fixed
+// in a game that has none is the whole cost).
+constexpr int kAttachAloneAfter = 600;
 
 #define FOV_XR_NEXT(X)                                                                                           \
     X(xrCreateSession) X(xrDestroySession) X(xrCreateSwapchain) X(xrEnumerateSwapchainImages)                   \
@@ -150,7 +153,10 @@ bool gaze_uv(const XrView views[2], float out[2][2]) {
         XR_FAILED(g.xrLocateSpace(s.gaze_space, s.view, s.display, &loc)) || (loc.locationFlags & need) != need)
         return false;
     XrVector3f d = rotate(loc.pose.orientation, {0, 0, -2});
-    XrVector3f p = {loc.pose.position.x + d.x, loc.pose.position.y + d.y, loc.pose.position.z + d.z};
+    // A runtime may give the direction without a position (its fields are then undefined): the gaze starts between
+    // the eyes, the origin of view space.
+    XrVector3f o = (loc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) ? loc.pose.position : XrVector3f{0, 0, 0};
+    XrVector3f p = {o.x + d.x, o.y + d.y, o.z + d.z};
     for (int e = 0; e < 2; ++e) {
         const XrPosef& eye = views[e].pose;
         XrQuaternionf inv = {-eye.orientation.x, -eye.orientation.y, -eye.orientation.z, eye.orientation.w};
@@ -251,15 +257,19 @@ XrResult XRAPI_CALL create_session(XrInstance instance, const XrSessionCreateInf
     XrResult r = g.xrCreateSession(instance, info, session);
     if (XR_FAILED(r)) return r;
     s.session = *session;
+    // Per session: the graphics API, and the frames counted before our action set may go alone.
+    s.gfx = FOV_GFX_NONE;
+    s.frames = 0;
+    bool foveates = false;
     auto& core = fov::Core::get();
     for (auto* b = static_cast<const XrBaseInStructure*>(info->next); b; b = b->next) {
         if (b->type == XR_TYPE_GRAPHICS_BINDING_D3D11_KHR) {
             s.gfx = FOV_GFX_D3D11;
-            fov::d3d11::install(reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(b)->device);
+            foveates = fov::d3d11::install(reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(b)->device);
         } else if (b->type == XR_TYPE_GRAPHICS_BINDING_D3D12_KHR) {
             auto* d = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(b);
             s.gfx = FOV_GFX_D3D12;
-            fov::d3d12::install(d->device, d->queue);
+            foveates = fov::d3d12::install(d->device, d->queue);
         }
     }
     if (s.gfx == FOV_GFX_NONE) core.disable(FOV_REASON_UNSUPPORTED_GPU, "graphics API not supported (D3D11 and D3D12 only)");
@@ -267,7 +277,9 @@ XrResult XRAPI_CALL create_session(XrInstance instance, const XrSessionCreateInf
     rs.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
     rs.poseInReferenceSpace.orientation.w = 1;
     g.xrCreateReferenceSpace(*session, &rs, &s.view);
-    setup_gaze(info->systemId);
+    // A game this GPU or graphics API cannot foveate gets nothing of ours in its input.
+    if (foveates) setup_gaze(info->systemId);
+    else s.gaze_supported = false;
     return r;
 }
 
@@ -354,14 +366,22 @@ XrResult XRAPI_CALL end_frame(XrSession session, const XrFrameEndInfo* info) {
 }
 
 XrResult XRAPI_CALL suggest(XrInstance instance, const XrInteractionProfileSuggestedBinding* b) {
-    if (!s.gaze || b->interactionProfile != s.profile) return g.xrSuggestInteractionProfileBindings(instance, b);
-    // Suggestions replace earlier ones per profile: keep the app's and ours together.
+    if (s.profile == XR_NULL_PATH || b->interactionProfile != s.profile)
+        return g.xrSuggestInteractionProfileBindings(instance, b);
+    // Suggestions replace earlier ones per profile: keep the app's and ours together. An app may suggest its own
+    // before it makes a session, when our action is not there yet: they go through as they are and are kept, so
+    // ours joins them later and never replaces them.
     s.app_eye_bindings.assign(b->suggestedBindings, b->suggestedBindings + b->countSuggestedBindings);
+    if (!s.gaze) return g.xrSuggestInteractionProfileBindings(instance, b);
     suggest_eye_bindings();
     return XR_SUCCESS;
 }
 
 XrResult XRAPI_CALL attach(XrSession session, const XrSessionActionSetsAttachInfo* info) {
+    // For a bug report: the runtime refuses this attach, and the game has no input in this session.
+    if (s.alone)
+        fov_log("eye gaze: the game attaches its action sets after ours was attached alone (%llu frames in)",
+                (unsigned long long)s.frames);
     if (!s.gaze_supported || s.attached) return g.xrAttachSessionActionSets(session, info);
     std::vector<XrActionSet> sets(info->actionSets, info->actionSets + info->countActionSets);
     sets.push_back(s.set);
@@ -369,8 +389,14 @@ XrResult XRAPI_CALL attach(XrSession session, const XrSessionActionSetsAttachInf
     mine.countActionSets = (uint32_t)sets.size();
     mine.actionSets = sets.data();
     XrResult r = g.xrAttachSessionActionSets(session, &mine);
-    if (XR_SUCCEEDED(r)) after_attach();
-    return r;
+    if (XR_SUCCEEDED(r)) {
+        after_attach();
+        return r;
+    }
+    // Never at the cost of the game's input: its own sets alone, and no eye gaze in this session.
+    fov_log("eye gaze: attach with our action set failed (%d), the game's sets go alone", (int)r);
+    s.gaze_supported = false;
+    return g.xrAttachSessionActionSets(session, info);
 }
 
 XrResult XRAPI_CALL sync(XrSession session, const XrActionsSyncInfo* info) {
@@ -380,7 +406,16 @@ XrResult XRAPI_CALL sync(XrSession session, const XrActionsSyncInfo* info) {
     XrActionsSyncInfo mine = *info;
     mine.countActiveActionSets = (uint32_t)sets.size();
     mine.activeActionSets = sets.data();
-    return g.xrSyncActions(session, &mine);
+    XrResult r = g.xrSyncActions(session, &mine);
+    if (XR_SUCCEEDED(r)) return r;
+    // The same call as the game made it. If that one works, ours was the trouble: it is left out from here on.
+    XrResult own = g.xrSyncActions(session, info);
+    if (XR_SUCCEEDED(own)) {
+        fov_log("eye gaze: sync with our action set failed (%d), left out from here on", (int)r);
+        s.attached = s.alone = s.gaze_supported = false;
+        s.gaze_space = XR_NULL_HANDLE;
+    }
+    return own;
 }
 
 XrResult XRAPI_CALL create_action_set(XrInstance instance, const XrActionSetCreateInfo* info, XrActionSet* set) {
@@ -447,16 +482,23 @@ XrResult XRAPI_CALL create_instance(const XrInstanceCreateInfo* info, const XrAp
         return fov::xr::create_next(info, layer, instance, g_next_gipa);
     // Ask for eye gaze on the app's behalf when the runtime has it.
     std::vector<const char*> exts(info->enabledExtensionNames, info->enabledExtensionNames + info->enabledExtensionCount);
-    bool asked = false;
+    bool asked = false, added = false;
     for (auto e : exts) asked |= !std::strcmp(e, kEyeGazeExt);
     XrInstanceCreateInfo mine = *info;
     if (!asked && runtime_has(layer->nextInfo->nextGetInstanceProcAddr, kEyeGazeExt)) {
         exts.push_back(kEyeGazeExt);
         mine.enabledExtensionCount = (uint32_t)exts.size();
         mine.enabledExtensionNames = exts.data();
-        asked = true;
+        asked = added = true;
     }
     XrResult r = fov::xr::create_next(&mine, layer, instance, g_next_gipa);
+    if (XR_FAILED(r) && added) {
+        // Never at the cost of the game starting (a layer below may refuse what the runtime listed): once more,
+        // exactly as the game asked.
+        fov_log("layer: no instance with the eye gaze extension added (%d), asking as the game did", (int)r);
+        asked = false;
+        r = fov::xr::create_next(info, layer, instance, g_next_gipa);
+    }
     if (XR_FAILED(r)) return r;
     s.instance = *instance;
     s.gaze_ext = asked;
@@ -464,9 +506,19 @@ XrResult XRAPI_CALL create_instance(const XrInstanceCreateInfo* info, const XrAp
     s.set = XR_NULL_HANDLE, s.gaze = XR_NULL_HANDLE, s.profile = s.binding = XR_NULL_PATH;
     s.app_eye_bindings.clear();
     s.app_sets = false;
+    // So did a session the app never destroyed: nothing of it may reach the next one (an action set marked as
+    // attached would be added to every sync of a session that never attached it).
+    s.session = XR_NULL_HANDLE, s.view = s.gaze_space = XR_NULL_HANDLE;
+    s.attached = s.alone = s.gaze_supported = false;
+    {
+        std::lock_guard lock(s.m);
+        s.swapchains.clear();
+    }
 #define FOV_LOAD(name) g_next_gipa(*instance, #name, reinterpret_cast<PFN_xrVoidFunction*>(&g.name));
     FOV_XR_NEXT(FOV_LOAD)
 #undef FOV_LOAD
+    // Known from here on: the app may suggest eye gaze bindings of its own before it makes a session.
+    if (asked && g.xrStringToPath) g.xrStringToPath(*instance, kEyeProfile, &s.profile);
     fov_log("layer: instance for \"%s\" (engine \"%s\"), eye gaze extension %s", info->applicationInfo.applicationName,
             info->applicationInfo.engineName, asked ? "on" : "off");
     return r;

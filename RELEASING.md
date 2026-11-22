@@ -6,7 +6,7 @@ What search engines and assistants read first is the repository's own page, so i
 
 1. **Name**: `FoveaXR` (GitHub redirects the old address after a rename).
 2. **About**:
-   - Description: `Free, open-source foveated rendering for any PC VR game: fixed for every headset, eye-tracked for Steam Frame and other eye-tracking headsets. OpenXR layer and OpenVR, Direct3D 11 (NVIDIA) and Direct3D 12 (NVIDIA, AMD, Intel).`
+   - Description: `Free, open-source foveated rendering for any PC VR game: fixed for every headset, eye-tracked (experimental) for Steam Frame and other eye-tracking headsets. OpenXR layer and OpenVR, Direct3D 11 (NVIDIA) and Direct3D 12 (NVIDIA, AMD, Intel).`
    - Topics (20 at most): `vr`, `virtual-reality`, `foveated-rendering`, `fixed-foveated-rendering`, `eye-tracking`,
      `variable-rate-shading`, `vrs`, `openxr`, `openxr-api-layer`, `openvr`, `steamvr`, `vr-performance`,
      `steam-frame`, `valve-index`, `meta-quest`, `directx-12`, `directx-11`, `nvidia`, `rust`, `cpp`.

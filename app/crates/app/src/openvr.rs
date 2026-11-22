@@ -159,6 +159,27 @@ pub fn enable(dlls: &[PathBuf], proxy: &Path) -> Result<(), String> {
     save(&records)
 }
 
+/// After the app was updated: games still running the proxy of the version before get this one. Only a file that
+/// is still exactly the proxy we put there is replaced; a game that is running keeps its old one until the next
+/// start of the app (its DLL is held). Returns how many were replaced.
+pub fn refresh(proxy: &Path) -> usize {
+    let Ok(bytes) = std::fs::read(proxy) else { return 0 };
+    let new = hash(&bytes);
+    let mut records = load();
+    let mut replaced = 0;
+    for r in &mut records {
+        if r.proxy != new && hash_file(&r.dll) == Some(r.proxy) && std::fs::write(&r.dll, &bytes).is_ok() {
+            r.proxy = new;
+            replaced += 1;
+        }
+    }
+    if replaced > 0 && save(&records).is_err() {
+        // The files are ours either way; with the old records the games show Re-enable, which writes them again.
+        return 0;
+    }
+    replaced
+}
+
 /// Puts the original back. If the game replaced our DLL with a new original, that one stays and only our renamed
 /// old copy goes. An error (a running game holds its DLLs) leaves both files as they were.
 fn restore(r: &Install) -> std::io::Result<()> {
@@ -246,6 +267,38 @@ mod tests {
         assert_eq!(state(std::slice::from_ref(&dll), &load()), State::On);
         disable(std::slice::from_ref(&dll))?;
         assert_eq!(std::fs::read(&dll).ok().as_deref(), Some(&b"the game's original"[..]));
+        assert!(!dir.join(ORIGINAL).exists());
+        assert_eq!(load(), before);
+        if !had_dir && let Some(d) = crate::settings::dir() {
+            let _ = std::fs::remove_dir(d);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        Ok(())
+    }
+
+    #[test]
+    fn an_updated_app_updates_the_proxies_it_installed() -> Result<(), String> {
+        let _records = RECORDS.lock().map_err(|e| e.to_string())?;
+        let dir = std::env::temp_dir().join(format!("fov-openvr-refresh-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let (dll, proxy) = (dir.join("openvr_api.dll"), dir.join("proxy.dll"));
+        std::fs::write(&dll, b"the game's original").map_err(|e| e.to_string())?;
+        std::fs::write(&proxy, b"proxy 1.0").map_err(|e| e.to_string())?;
+        let before = load();
+        let had_dir = crate::settings::dir().is_some_and(|d| d.exists());
+        enable(std::slice::from_ref(&dll), &proxy)?;
+        assert_eq!(refresh(&proxy), 0, "the same version: nothing to do");
+        std::fs::write(&proxy, b"proxy 1.1").map_err(|e| e.to_string())?;
+        assert_eq!(refresh(&proxy), 1);
+        assert_eq!(std::fs::read(&dll).ok().as_deref(), Some(&b"proxy 1.1"[..]));
+        assert_eq!(state(std::slice::from_ref(&dll), &load()), State::On);
+        // A game update put a new DLL of the game's there: never overwritten, it shows as Re-enable.
+        std::fs::write(&dll, b"the game's new original").map_err(|e| e.to_string())?;
+        std::fs::write(&proxy, b"proxy 1.2").map_err(|e| e.to_string())?;
+        assert_eq!(refresh(&proxy), 0);
+        assert_eq!(std::fs::read(&dll).ok().as_deref(), Some(&b"the game's new original"[..]));
+        disable(std::slice::from_ref(&dll))?;
+        assert_eq!(std::fs::read(&dll).ok().as_deref(), Some(&b"the game's new original"[..]));
         assert!(!dir.join(ORIGINAL).exists());
         assert_eq!(load(), before);
         if !had_dir && let Some(d) = crate::settings::dir() {

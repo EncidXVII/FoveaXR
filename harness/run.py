@@ -125,7 +125,7 @@ def run(fixture, frames=600, heavy=64, adapter=None, layer=False, proxy=False, g
     time.sleep(0.05)
     stats = writer.stats(os.path.basename(exe).lower())
     stats = {k: (list(map(list, getattr(stats, k))) if k == "focus" else getattr(stats, k)) for k, _ in
-             shm.Stats._fields_ if k not in ("exe", "last_error", "pad2")} if stats else None
+             shm.Stats._fields_ if k not in ("exe", "last_error")} if stats else None
     writer.close()
 
     core = []

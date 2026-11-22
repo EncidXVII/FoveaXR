@@ -55,8 +55,8 @@ std::wstring host_dir(Host kind);
 // Inline hook on a function (taken from a vtable); the detour reaches the original through *original.
 bool hook(void* target, void* detour, void** original);
 
-// Debug tint shader (D3D11 and D3D12): ring colours over an eye image. Constants: focus uv, inner and mid degrees,
-// then the eye's fov tangents l r u d. Drawn as one full-screen triangle into the eye's viewport.
+// Debug tint shader (D3D11 and D3D12): ring colours over an eye image. Constants: focus uv, the angles in
+// degrees from which it is yellow (2 px blocks) and red (4 px blocks), then the eye's fov tangents l r u d. Drawn as one full-screen triangle into the eye's viewport.
 constexpr char kTintHlsl[] = R"(
 cbuffer P : register(b0) { float4 ring; float4 fov; };
 struct V { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
@@ -105,7 +105,7 @@ public:
     bool foveating() const;
     uint64_t pattern_version() const;
     void pattern(Target t, uint32_t w, uint32_t h, uint32_t tile, std::vector<uint8_t>& out) const;
-    // Debug tint: per eye focus (2), inner and mid radius (2) in degrees, fov (4).
+    // Debug tint: per eye focus (2), the angles in degrees from which it is yellow and red (2), fov (4).
     bool tint() const;
     void tint_params(int eye, float out[8]) const;
 

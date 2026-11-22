@@ -82,7 +82,7 @@ typedef struct FovStats {
     uint64_t frames, rings_bound, uncertain_eye;
     float focus[2][2];    /* last focus point per eye, UV (the harness checks it follows the test gaze) */
     uint64_t ui_skipped;  /* passes on eye-sized targets left unfoveated (no depth: UI, post) */
-    uint64_t pad2;
+    uint64_t eye_passes;  /* eye passes recognised, foveated or not: 0 in a running game = nothing to foveate */
     char last_error[96];
 } FovStats;
 

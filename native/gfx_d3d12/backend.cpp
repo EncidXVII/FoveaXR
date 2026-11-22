@@ -362,17 +362,23 @@ bool install(ID3D12Device* device, ID3D12CommandQueue* queue) {
         core.disable(FOV_REASON_UNSUPPORTED_GPU, "D3D12: this GPU has no VRS Tier 2");
         return false;
     }
+    // Before anything is kept: without our own list there is nothing to upload rate images with.
+    bool made = SUCCEEDED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&g_ours.fence)));
+    for (auto& a : g_ours.alloc)
+        made = made && SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&a)));
+    made = made && SUCCEEDED(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_ours.alloc[0].Get(), nullptr,
+                                                       IID_PPV_ARGS(&g_ours.list)));
+    if (!made) {
+        core.disable(FOV_REASON_ERROR, "D3D12: could not create the command list for rate images");
+        return false;
+    }
+    g_ours.list->Close();
     g_device = device;
     g_queue = queue;
     g_tile = caps.tile;
     g_extra_rates = caps.extra_rates;
     device->AddRef();
     queue->AddRef();  // both held for the life of the process, like the hooks
-    device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&g_ours.fence));
-    for (auto& a : g_ours.alloc) device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&a));
-    device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_ours.alloc[0].Get(), nullptr,
-                              IID_PPV_ARGS(&g_ours.list));
-    g_ours.list->Close();
 
     UINT64 freq = 0;
     D3D12_QUERY_HEAP_DESC qh = {D3D12_QUERY_HEAP_TYPE_TIMESTAMP, kFrames * kPerFrame};

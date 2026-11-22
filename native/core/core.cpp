@@ -57,12 +57,15 @@ struct Core::State {
     Rings rings = {};
     bool tracked = false;
     std::atomic<bool> fove{false}, tint{false}, disabled{false};
-    std::atomic<uint64_t> frame{0}, version{1}, binds{0}, skips{0}, uncertain{0};
-    std::atomic<uint32_t> eye_w{0}, eye_h{0};
+    std::atomic<uint64_t> frame{0}, version{1}, binds{0}, skips{0}, uncertain{0}, passes{0};
+    std::atomic<uint32_t> eye_w{0}, eye_h{0}, layout{FOV_LAYOUT_UNKNOWN};
     std::shared_mutex eyes_m;
     std::unordered_map<const void*, int> eyes;
     bool ab_off = false, f9 = false, f10 = false;
     int mode_override = -1;
+    // The app's on/off and mode as last seen: a change there ends what the hotkeys set in this game.
+    bool seen = false;
+    uint32_t seen_enabled = 0, seen_mode = 0;
     int slot = -1;
     FovStats stats = {};
     double ema[2] = {0, 0};  // [foveated]
@@ -101,6 +104,13 @@ bool Core::start(FovApi api) {
     s_->stats.reason = reason;
     active_ = reason == FOV_REASON_ACTIVE;
     s_->stats.active = active_;
+    if (active_) {
+        // Hooks and patched tables will point into this module: it stays loaded until the process ends. The OpenXR
+        // loader unloads a layer with its instance, and a game may free openvr_api.dll, while both keep rendering.
+        HMODULE self = nullptr;
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                           reinterpret_cast<LPCWSTR>(&module_dir), &self);
+    }
     if (fov_shm_connect()) s_->slot = fov_shm_claim_slot();
     if (!fov_shm_read_settings(&s_->settings)) fov_settings_load(&s_->settings);
     fov_log("core %s: %s (app %u), %s: %s", fov_version(), exe.c_str(), app_id,
@@ -143,12 +153,36 @@ void Core::begin_frame(const Fov fov[2], const float (*gaze_uv)[2], FovGazeSourc
     FovSettings set;
     if (fov_shm_read_settings(&set)) s_->settings = set;
     set = s_->settings;
+    // What the user sets in the app applies: a mode or an A/B state left by a hotkey would keep this game deaf to
+    // the app's switch and Mode until it restarts.
+    if (s_->seen && (s_->seen_enabled != set.enabled || s_->seen_mode != set.mode)) {
+        if (s_->mode_override >= 0 || s_->ab_off) fov_log("the app's setting changed: hotkey state cleared");
+        s_->mode_override = -1;
+        s_->ab_off = false;
+    }
+    s_->seen = true, s_->seen_enabled = set.enabled, s_->seen_mode = set.mode;
+
+    // An eye tracker's sample is used as it is, if it is a point in the eye image: clamped into it, and dropped
+    // when it is no number at all (a pattern built around NaN would shade the whole image coarsely).
+    float gaze[2][2] = {};
+    bool have_gaze = gaze_uv != nullptr;
+    for (int e = 0; e < 2 && have_gaze; ++e) {
+        for (int i = 0; i < 2; ++i) {
+            if (!std::isfinite(gaze_uv[e][i])) have_gaze = false;
+            else gaze[e][i] = std::fmin(1.0f, std::fmax(0.0f, gaze_uv[e][i]));
+        }
+    }
 
     // Hotkeys, read here so they work without the app: Ctrl+F9 A/B, Ctrl+F10 cycles Off -> Fixed -> Eye-tracked.
     bool ctrl = pressed(VK_CONTROL), f9 = ctrl && pressed(VK_F9), f10 = ctrl && pressed(VK_F10);
     if (f9 && !s_->f9) {
         s_->ab_off = !s_->ab_off;
-        s_->ema_frames[0] = s_->ema_frames[1] = 0;
+        {
+            // Only the state now entered starts over. The one just left keeps its settled time, so both are there to
+            // compare once this one has settled too (resetting both left one of them empty at all times).
+            std::lock_guard lock(s_->m);
+            s_->ema_frames[s_->ab_off ? 0 : 1] = 0;
+        }
         fov_log("A/B: foveation %s", s_->ab_off ? "off" : "on");
     }
     if (f10 && !s_->f10) {
@@ -160,10 +194,10 @@ void Core::begin_frame(const Fov fov[2], const float (*gaze_uv)[2], FovGazeSourc
     uint32_t mode = s_->mode_override >= 0 ? (uint32_t)s_->mode_override : set.mode;
 
     Rings r = {};
-    bool tracked = mode == FOV_MODE_EYE && gaze_uv;
+    bool tracked = mode == FOV_MODE_EYE && have_gaze;
     for (int e = 0; e < 2; ++e) {
         r.fov[e] = fov[e];
-        if (tracked) r.focus[e][0] = gaze_uv[e][0], r.focus[e][1] = gaze_uv[e][1];
+        if (tracked) r.focus[e][0] = gaze[e][0], r.focus[e][1] = gaze[e][1];
         else optical_centre(fov[e], r.focus[e]);
     }
     float scale = tracked ? kTrackedScale : 1.0f;
@@ -181,8 +215,8 @@ void Core::begin_frame(const Fov fov[2], const float (*gaze_uv)[2], FovGazeSourc
             s_->version++;
         }
         s_->tracked = tracked;
-        s_->gaze_valid += ((gaze_uv ? 100.0 : 0.0) - s_->gaze_valid) * kEmaAlpha;
-        s_->stats.gaze_source = gaze_uv ? source : FOV_GAZE_NONE;
+        s_->gaze_valid += ((have_gaze ? 100.0 : 0.0) - s_->gaze_valid) * kEmaAlpha;
+        s_->stats.gaze_source = have_gaze ? source : FOV_GAZE_NONE;
     }
     s_->tint = set.debug_tint != 0;
     s_->fove = set.enabled && mode != FOV_MODE_OFF && !s_->ab_off && !s_->disabled;
@@ -199,12 +233,19 @@ uint64_t Core::frame() const { return s_ ? s_->frame.load() : 0; }
 void Core::set_eye_size(uint32_t w, uint32_t h) {
     if (s_->eye_w == w && s_->eye_h == h) return;
     s_->eye_w = w, s_->eye_h = h;
-    fov_log("eye size %ux%u", w, h);
+    // A game with dynamic resolution changes it every few frames: the first changes are enough for the log.
+    static std::atomic<int> logged{0};
+    constexpr int kLogged = 8;
+    int n = logged.load();
+    if (n > kLogged) return;
+    logged = n + 1;
+    if (n < kLogged) fov_log("eye size %ux%u", w, h);
+    else fov_log("eye size keeps changing (dynamic resolution): not logged from here on");
 }
 
 void Core::set_layout(FovLayout layout) {
+    if (s_->layout.exchange(layout) == (uint32_t)layout) return;
     std::lock_guard lock(s_->m);
-    if (s_->stats.layout == (uint32_t)layout) return;
     s_->stats.layout = layout;
     fov_log("layout: %s", layout == FOV_LAYOUT_ARRAY ? "texture array" : layout == FOV_LAYOUT_WIDE ? "double wide" : "separate");
 }
@@ -222,7 +263,13 @@ Core::Bind Core::classify(const void* resource, uint32_t w, uint32_t h, uint32_t
     bool wide = close_to(w, 2 * ew, 4) && close_to(h, eh, 2);
     bool exact = close_to(w, ew, 2) && close_to(h, eh, 2);
     // Render scale / upscaler input: same aspect, at least a third of the eye width.
-    bool scaled = !exact && !wide && w * 3 >= ew && std::fabs(double(w) / h - double(ew) / eh) < 0.01 * double(ew) / eh;
+    auto shaped = [&](double aspect) { return std::fabs(double(w) / h - aspect) < 0.01 * aspect; };
+    bool scaled = !exact && !wide && w * 3 >= ew && shaped(double(ew) / eh);
+    // The same for both eyes side by side (an engine that submits double wide renders double wide at its render
+    // scale). Only in a game that submits that way: the shape alone is close to a 16:9 desktop view.
+    bool scaled_wide = !exact && !wide && !scaled && s_->layout == FOV_LAYOUT_WIDE && w * 3 >= 2 * ew &&
+                       shaped(2.0 * ew / eh);
+    wide |= scaled_wide;
     if (w == h && ew != eh) return b;  // shadow maps and the like
     if (!exact && !wide && !scaled) return b;
     // Scene passes bind depth of the same size; full-screen post and UI passes bind none.
@@ -231,6 +278,7 @@ Core::Bind Core::classify(const void* resource, uint32_t w, uint32_t h, uint32_t
         return b;
     }
     b.eye = true;
+    s_->passes++;
     b.foveate = s_->fove;
     if (wide) {
         b.target = Target::Wide;
@@ -261,7 +309,16 @@ bool Core::tint() const { return s_ && s_->tint && s_->fove; }
 void Core::tint_params(int eye, float out[8]) const {
     std::lock_guard lock(s_->m);
     const Rings& r = s_->rings;
-    out[0] = r.focus[eye][0], out[1] = r.focus[eye][1], out[2] = r.inner_deg, out[3] = r.mid_deg;
+    // The tint says what is shaded how: yellow from where the rate first drops (2 px blocks), red from where it
+    // reaches 4 px blocks. Low keeps full rate out to its mid radius and never goes past 2x2: no tint inside the
+    // mid radius, no red at all.
+    const float edge[3] = {0, r.inner_deg, r.mid_deg};
+    float yellow = 181, red = 181;  // further than any angle between two view directions
+    for (int i = 2; i >= 0; --i) {
+        if (r.rate[i] >= FOV_RATE_2X1) yellow = edge[i];
+        if (r.rate[i] >= FOV_RATE_4X2) red = edge[i];
+    }
+    out[0] = r.focus[eye][0], out[1] = r.focus[eye][1], out[2] = yellow, out[3] = red;
     out[4] = r.fov[eye].l, out[5] = r.fov[eye].r, out[6] = r.fov[eye].u, out[7] = r.fov[eye].d;
 }
 
@@ -280,6 +337,7 @@ void Core::publish() {
         st.frames = s_->frame;
         st.rings_bound = s_->binds;
         st.ui_skipped = s_->skips;
+        st.eye_passes = s_->passes;
         st.uncertain_eye = s_->uncertain;
         st.gaze_valid_pct = (float)s_->gaze_valid;
         // Only once both A/B states have settled: a fresh toggle would compare mismatched scenes.

@@ -10,13 +10,13 @@
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 **FoveaXR is a free, open-source tool that adds foveated rendering to the PC VR games you already own.** Fixed
-foveation for every headset, eye-tracked for Steam Frame and other eye-tracking headsets. It works in SteamVR
+foveation for every headset, eye-tracked (experimental) for Steam Frame and other eye-tracking headsets. It works in SteamVR
 (OpenVR) and OpenXR games without mods or per-game patches: install it, start the game, get GPU time back.
 
-**[Download the latest release](https://github.com/EncidXVII/FoveaXR/releases/latest)** · [Supported GPUs and games](#supported) · [Common questions](#common-questions) · [Honest limits](#honest-limits)
+**[Download the latest release](https://github.com/EncidXVII/FoveaXR/releases/latest)** · [Supported GPUs and games](#supported) · [Common questions](#common-questions) · [Limits](#limits)
 
-> **Status: 1.0 on Windows, fixed foveation.** Eye-tracked mode and the Linux build are written but not yet tested
-> in a headset. Game reports (what a game saved, or that it saved nothing) are what it needs most:
+> **Status: 1.0 on Windows, fixed foveation.** Eye-tracked mode and the Linux build are
+> experimental. Game reports (what a game saved, or that it saved nothing) are what it needs most:
 > see [Status and help wanted](#status-and-help-wanted).
 
 | Foveation | Games |
@@ -33,13 +33,13 @@ Real games save less: how much depends on how much of their frame is pixel shadi
 |---|---|
 | **What it is** | Foveated rendering for PC VR games that have none: the edge of each eye's view is shaded at a lower rate than the centre, so the GPU does less work per frame |
 | **Use it for** | More frames per second or a higher resolution in SteamVR and OpenXR games, with no change to the game |
-| **Modes** | Fixed (every headset) and eye-tracked (headsets that share eye tracking with PC games, such as Steam Frame); presets Low, Medium, High |
+| **Modes** | Fixed (every headset) and eye-tracked (experimental; headsets that share eye tracking with PC games, such as Steam Frame); presets Low, Medium, High |
 | **Games** | OpenXR games (all of them, through an API layer) and OpenVR games (per game, one click); Direct3D 11 and 12 |
 | **GPUs** | Direct3D 12: NVIDIA RTX 20 and newer, AMD RX 6000 and newer, Intel Arc. Direct3D 11: NVIDIA RTX 20 and newer |
 | **Platforms** | Windows 10 and 11; Linux with Proton (experimental, Direct3D 12 games) |
 | **Safe to try** | Never runs in anti-cheat games; uninstall puts every game file back |
 | **Price** | Free. No account, no telemetry |
-| **Status** | 1.0 on Windows with fixed foveation; eye-tracked mode and Linux are not yet tested in a headset; game reports wanted |
+| **Status** | 1.0 on Windows with fixed foveation; eye-tracked mode and Linux are experimental; game reports wanted |
 | **License** | Open source, `GPL-3.0-or-later`, © 2026 EncidXVII |
 
 ## Install (Windows)
@@ -48,13 +48,16 @@ Real games save less: how much depends on how much of their frame is pixel shadi
 2. Run `Install.cmd`. No admin rights: it installs for your Windows user only and starts the app (tray icon).
 3. OpenXR games are foveated from their next start. OpenVR games: open the app's **Games** tab and press **Enable**.
 
+`FoveaXR.exe` started straight from the unzipped folder, without `Install.cmd`, has no OpenXR layer registered: the
+app says so, and lists OpenXR games as **Not installed**.
+
 Uninstall: Start menu → **Uninstall FoveaXR**. It puts every game's original `openvr_api.dll` back and removes the
 OpenXR layer, settings and logs.
 
 ## Install (Linux, experimental)
 
-For SteamVR on Linux with games running under Proton. **Experimental: built and unit tested, not yet tested in a
-headset or with a real game.**
+For SteamVR on Linux with games running under Proton. **Experimental: requires
+more testing.**
 
 1. Download `FoveaXR-1.0.0-linux-x86_64.tar.gz`, check it against its `.sha256`, unpack.
 2. Run `./install.sh`: per user, no root (`~/.local/share/foveaxr`, a menu entry). The tray icon needs a
@@ -71,7 +74,9 @@ available**: Proton's NVAPI (dxvk-nvapi) has no D3D11 variable rate shading, and
 ## Use
 
 - **Foveation**: on / off, **Mode** (Fixed, or Eye-tracked where the headset shares eye tracking), **Preset** (Low,
-  Medium, High), and the GPU time saved in the running game. Changes apply to running games at once.
+  Medium, High), and the GPU time saved in the running game. Changes apply to running games at once. The card
+  names the running game and says what is true of it: foveated or not (and why not), Fixed or eye-tracked, and
+  whether eye tracking reaches that game at all.
 - **Games**: your Steam VR games with their status. Search, filter (Enabled, OpenVR, OpenXR, Blocked), sort by name
   or last played; arrow keys move, Enter runs the row's action, Space opens its explanation, `/` searches.
 - **Settings**: accent theme, **debug tint** (colours the coarse rings: yellow half rate, red quarter rate), and
@@ -84,8 +89,7 @@ games through SteamVR's eye-tracked foveation centre (SteamVR 2.15+). Without ey
 
 ## Supported
 
-**Windows 10 and 11, x64.** **Linux x86_64 with Proton: experimental** (see above): D3D12 games only, untested in a
-headset.
+**Windows 10 and 11, x64.** **Linux x86_64 with Proton: experimental** (see above): D3D12 games only.
 
 | | NVIDIA (Turing / RTX 20 and newer) | AMD (RDNA2 / RX 6000 and newer) | Intel Arc |
 |---|---|---|---|
@@ -97,7 +101,7 @@ headset.
 
 VR APIs: OpenXR (API layer, all OpenXR games on any runtime) and OpenVR (per-game, after **Enable**).
 
-## Honest limits
+## Limits
 
 - Never runs in games with anti-cheat (EasyAntiCheat, BattlEye, listed games) or in games that foveate themselves.
   Online games: don't, even if not blocked.
@@ -105,7 +109,7 @@ VR APIs: OpenXR (API layer, all OpenXR games on any runtime) and OpenVR (per-gam
   lighting pass binds no depth, may get no savings. Games using temporal anti-aliasing can show shimmer at the ring
   edges.
 - D3D12 render targets created before the first OpenVR submit are not recognised: some OpenVR D3D12 games save
-  nothing.
+  nothing. OpenVR games that submit texture arrays (`SubmitWithArrayIndex`) are not foveated.
 - A game update replaces our `openvr_api.dll`; the app then shows **Re-enable**.
 - Windows may warn about the unsigned app, and antivirus may flag `openvr_api.dll` in game folders (it wraps the
   game's original DLL). Code signing comes later.
@@ -116,10 +120,10 @@ FoveaXR 1.0 is the first release. Where each part stands, and what moves it forw
 
 | Area | Where it stands | What helps |
 |---|---|---|
-| **Windows, fixed foveation** | Works in OpenXR and OpenVR games on Direct3D 11 (NVIDIA) and Direct3D 12. The saving is measured on the test scene and in a real game; how it does across many games is not known yet | A [game report](https://github.com/EncidXVII/FoveaXR/issues/new): the game, its graphics API, your GPU and headset, the saving the app shows after Ctrl+F9, and the logs zip |
-| **Games that save nothing** | Detection goes by render-target size, so games that render at an unusual size, deferred renderers and some OpenVR Direct3D 12 games get no saving (see [Honest limits](#honest-limits)) | The same report for those games: they are as useful as the good ones, and the logs show what to teach the detection |
-| **Eye-tracked foveation** | Written for OpenXR eye gaze and SteamVR's eye-tracked foveation centre; not yet tested on a headset with eye tracking | Reports from Steam Frame and other eye-tracking headsets |
-| **Linux (Proton)** | Experimental: built and unit tested, not yet tried in a headset or with a real game; Direct3D 12 games only | Reports with your distro, GPU, driver and the game |
+| **Windows, fixed foveation** | Works in OpenXR and OpenVR games on Direct3D 11 (NVIDIA) and Direct3D 12. The saving depends on how much of a game's frame is pixel shading; Ctrl+F9 shows it in yours | A [game report](https://github.com/EncidXVII/FoveaXR/issues/new): the game, its graphics API, your GPU and headset, the saving the app shows after Ctrl+F9, and the logs zip |
+| **Games that save nothing** | Detection goes by render-target size, so games that render at an unusual size, deferred renderers and some OpenVR Direct3D 12 games get no saving (see [Limits](#limits)) | The same report for those games: they are as useful as the good ones, and the logs show what to teach the detection |
+| **Eye-tracked foveation** | Supports OpenXR eye gaze and SteamVR's eye-tracked foveation centre; experimental, requires more testing | Reports from Steam Frame and other eye-tracking headsets |
+| **Linux (Proton)** | Experimental, requires more testing; Direct3D 12 games only | Reports with your distro, GPU, driver and the game |
 | **Game lists** | `profiles/` names the games with anti-cheat and the games that foveate themselves, so FoveaXR leaves them alone. Such lists are never complete | An issue or pull request for a game they miss |
 | **Not built yet** | Vulkan and OpenGL games. Direct3D 11 on AMD and Intel cannot work: those drivers have no variable rate shading there | A report naming the Vulkan games you miss most |
 | **Code signing** | Builds are not signed yet: Windows may warn, and antivirus may flag `openvr_api.dll` in game folders | Nothing: every release has a SHA-256 checksum |
@@ -139,11 +143,11 @@ with anti-cheat and games that already foveate themselves are left alone.
 
 **Which headsets work?** Fixed mode works on every PC VR headset: Valve Index, Meta Quest 2 / 3 / Pro over Link,
 Air Link, Virtual Desktop or Steam Link, HTC Vive, Pico, Bigscreen Beyond, Pimax, Windows Mixed Reality, Steam
-Frame. Eye-tracked mode needs a headset whose eye tracking reaches PC games (Steam Frame, and headsets that offer
+Frame (experimental). Eye-tracked mode (experimental) needs a headset whose eye tracking reaches PC games (Steam Frame, and headsets that offer
 OpenXR eye gaze).
 
 **How much faster is it?** It depends on how much of a game's frame is pixel shading. The test scene went from 1.37
-to 0.25 ms per frame for the eye passes on the High preset; a real game measured 22% less. Press Ctrl+F9 in VR
+to 0.25 ms per frame for the eye passes on the High preset; Tower Unite measured 22% less. Press Ctrl+F9 in VR
 to switch it off and on, and the app shows the GPU time your game saves.
 
 **Will I see it?** On Low and Medium most people do not. On High, or with a wide field of view, the outer ring can

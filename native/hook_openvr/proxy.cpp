@@ -45,19 +45,44 @@ std::wstring own_dir() {
 using GetInterface = void*(VR_CALLTYPE*)(const char*, vr::EVRInitError*);
 GetInterface g_get_interface = nullptr;
 vr::IVRSystem* g_system = nullptr;
-bool g_gaze_device = false;
+bool g_system_missing = false;  // the runtime had no IVRSystem we can use: asked once per OpenVR start
+bool g_gaze_api = false;        // this IVRSystem has GetEyeTrackedFoveationCenter (SteamVR 2.15 and newer)
+bool g_gaze_device = false;     // and the headset gives eye gaze
+bool g_frame_open = false;      // a frame was begun and its right eye not yet submitted
+// How often a headset that did not announce eye gaze is asked all the same.
+constexpr unsigned kGazeProbeFrames = 90;
 
 // --- frame ----------------------------------------------------------------------------------------------------
+
+void find_system() {
+    vr::EVRInitError e;
+    g_system = static_cast<vr::IVRSystem*>(g_get_interface(vr::IVRSystem_Version, &e));
+    g_gaze_api = g_system != nullptr;
+    if (g_system) {
+        g_gaze_device = g_system->GetBoolTrackedDeviceProperty(vr::k_unTrackedDeviceIndex_Hmd,
+                                                               vr::Prop_SupportsXrEyeGazeInteraction_Bool);
+        fov_log("openvr: eye gaze %s", g_gaze_device ? "supported" : "not announced by this headset");
+        return;
+    }
+    // A SteamVR older than this header. GetProjectionRaw is the third method of every IVRSystem these names reach,
+    // and it is all Fixed mode needs: nothing else is called on an older one.
+    g_gaze_device = false;
+    for (const char* older : {"IVRSystem_025", "IVRSystem_024", "IVRSystem_023", "IVRSystem_022", "IVRSystem_021",
+                              "IVRSystem_020", "IVRSystem_019"}) {
+        g_system = static_cast<vr::IVRSystem*>(g_get_interface(older, &e));
+        if (!g_system) continue;
+        fov_log("openvr: SteamVR has no %s, using %s: fixed foveation only", vr::IVRSystem_Version, older);
+        return;
+    }
+    g_system_missing = true;
+    fov_log("openvr: SteamVR gave no IVRSystem interface: no foveation");
+}
 
 void begin_frame() {
     auto& core = fov::Core::get();
     if (!g_system) {
-        vr::EVRInitError e;
-        g_system = static_cast<vr::IVRSystem*>(g_get_interface(vr::IVRSystem_Version, &e));
+        if (!g_system_missing) find_system();
         if (!g_system) return;
-        g_gaze_device = g_system->GetBoolTrackedDeviceProperty(vr::k_unTrackedDeviceIndex_Hmd,
-                                                               vr::Prop_SupportsXrEyeGazeInteraction_Bool);
-        fov_log("openvr: eye gaze %s", g_gaze_device ? "supported" : "not supported by this headset");
     }
     fov::Fov fov[2];
     for (int e = 0; e < 2; ++e) {
@@ -68,7 +93,16 @@ void begin_frame() {
     float uv[2][2];
     FovGazeSource source = FOV_GAZE_OPENVR_CENTER;
     vr::HmdVector2_t ndc[2];
-    bool have = g_gaze_device && g_system->GetEyeTrackedFoveationCenter(&ndc[0], &ndc[1]);
+    // The property is how a headset says it shares eye gaze (it is named for OpenXR), but the call itself is the
+    // answer: false without an eye tracker. So a headset that did not announce it is still asked now and then,
+    // and believed once it answers.
+    static unsigned probe = 0;
+    bool have = g_gaze_api && (g_gaze_device || probe++ % kGazeProbeFrames == 0) &&
+                g_system->GetEyeTrackedFoveationCenter(&ndc[0], &ndc[1]);
+    if (have && !g_gaze_device) {
+        g_gaze_device = true;
+        fov_log("openvr: eye gaze arrives from this headset");
+    }
     if (have) {
         for (int e = 0; e < 2; ++e) uv[e][0] = (ndc[e].v[0] + 1) / 2, uv[e][1] = (1 - ndc[e].v[1]) / 2;
     } else {
@@ -80,6 +114,19 @@ void begin_frame() {
         }
     }
     core.begin_frame(fov, have ? uv : nullptr, source);
+    g_frame_open = true;
+}
+
+// A game that takes its poses another way (GetLastPoses after PostPresentHandoff) never calls WaitGetPoses: its
+// frame begins at its first submit, or nothing would ever be foveated there.
+void before_submit() {
+    if (!g_frame_open) begin_frame();
+}
+
+void after_submit(vr::EVREye eye) {
+    if (eye != vr::Eye_Right) return;
+    fov::Core::get().end_frame();
+    g_frame_open = false;
 }
 
 // The first submit names the graphics API; every submit names its eye's texture and size.
@@ -171,9 +218,10 @@ vr::EVRCompositorError wait_hook(void* self, vr::TrackedDevicePose_t* a, uint32_
 
 vr::EVRCompositorError submit_hook(void* self, vr::EVREye eye, const vr::Texture_t* t, const vr::VRTextureBounds_t* b,
                                    vr::EVRSubmitFlags f) {
+    before_submit();
     submitted(eye, t, b);
     vr::EVRCompositorError r = originals(self)->submit(self, eye, t, b, f);
-    if (eye == vr::Eye_Right) fov::Core::get().end_frame();
+    after_submit(eye);
     return r;
 }
 
@@ -185,9 +233,10 @@ vr::EVRCompositorError fn_wait_hook(vr::TrackedDevicePose_t* a, uint32_t n, vr::
 
 vr::EVRCompositorError fn_submit_hook(vr::EVREye eye, const vr::Texture_t* t, const vr::VRTextureBounds_t* b,
                                       vr::EVRSubmitFlags f) {
+    before_submit();
     submitted(eye, t, b);
     vr::EVRCompositorError r = g_fn_submit(eye, t, b, f);
-    if (eye == vr::Eye_Right) fov::Core::get().end_frame();
+    after_submit(eye);
     return r;
 }
 
@@ -239,6 +288,7 @@ using Shutdown = void(VR_CALLTYPE*)();
 Shutdown g_shutdown = nullptr;
 void VR_CALLTYPE shutdown() {
     g_system = nullptr;
+    g_system_missing = g_gaze_api = g_gaze_device = g_frame_open = false;
     g_shutdown();
 }
 
@@ -258,16 +308,21 @@ extern "C" void* fov_proxy_resolve(uint64_t index) {
         std::wstring path = own_dir() + L"openvr_api.fov-orig.dll";
         HMODULE orig = LoadLibraryW(path.c_str());
         if (!orig) fov_log("openvr proxy: cannot load %ls (%lu); every call returns 0", path.c_str(), GetLastError());
+        const bool active = orig && fov::Core::get().start(FOV_API_OPENVR);
+        // Each target is written once, with its final value: another thread's stub may read the table meanwhile, and
+        // must never get the unwrapped original of a function we wrap.
         for (size_t i = 0; i < kCount; ++i) {
             FARPROC f = orig ? GetProcAddress(orig, kNames[i]) : nullptr;
-            fov_proxy_targets[i] = f ? reinterpret_cast<void*>(f) : reinterpret_cast<void*>(&missing_export);
+            void* target = f ? reinterpret_cast<void*>(f) : reinterpret_cast<void*>(&missing_export);
+            if (active && i == kGetGenericInterface && f) {
+                g_get_interface = reinterpret_cast<GetInterface>(target);
+                target = reinterpret_cast<void*>(&get_interface);
+            } else if (active && i == kShutdown) {
+                g_shutdown = reinterpret_cast<Shutdown>(target);
+                target = reinterpret_cast<void*>(&shutdown);
+            }
+            fov_proxy_targets[i] = target;
         }
-        if (!orig || !fov::Core::get().start(FOV_API_OPENVR)) return;
-        g_get_interface = reinterpret_cast<GetInterface>(fov_proxy_targets[kGetGenericInterface]);
-        if (g_get_interface != reinterpret_cast<void*>(&missing_export))
-            fov_proxy_targets[kGetGenericInterface] = reinterpret_cast<void*>(&get_interface);
-        g_shutdown = reinterpret_cast<Shutdown>(fov_proxy_targets[kShutdown]);
-        fov_proxy_targets[kShutdown] = reinterpret_cast<void*>(&shutdown);
     });
     return index < kCount ? fov_proxy_targets[index] : reinterpret_cast<void*>(&missing_export);
 }

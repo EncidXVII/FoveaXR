@@ -57,6 +57,13 @@ pub fn reveal(file: &Path) {
     }
 }
 
+/// Opens a web page in the default browser (Settings > About). Only https links, so nothing else can be started.
+pub fn open_url(url: &str) {
+    if url.starts_with("https://") {
+        let _ = std::process::Command::new(if cfg!(windows) { "explorer" } else { "xdg-open" }).arg(url).spawn();
+    }
+}
+
 /// Steam's install folders: the registry on Windows; on Linux the native, Debian/Ubuntu and Flatpak locations
 /// (the same library seen twice through symlinks is listed once).
 pub fn steam_roots() -> Vec<PathBuf> {
@@ -81,6 +88,16 @@ pub fn steam_roots() -> Vec<PathBuf> {
         }
         roots
     }
+}
+
+/// Whether OpenXR games get our layer without a step per game. Windows: the layer is registered for this user (the
+/// installer does it; an app started straight from the unzipped folder has none). Linux registers it per game, in
+/// each Proton prefix, and shows that per game.
+pub fn openxr_layer_registered() -> bool {
+    #[cfg(windows)]
+    return fov_shm::sys::openxr_layer_registered("fov_openxr_layer.json");
+    #[cfg(unix)]
+    return true;
 }
 
 /// The desktop's "reduce animations" setting: Windows' Animation effects; GNOME's enable-animations; KDE's animation

@@ -14,6 +14,9 @@ pub struct Entry {
     pub vr: State,
     /// Linux: the OpenXR layer in the game's Proton prefix. None on Windows, where one layer covers every game.
     pub xr: Option<State>,
+    /// Windows: the OpenXR layer is not registered for this user (the app was started without installing it), so
+    /// OpenXR games start without it.
+    pub no_layer: bool,
     pub busy: bool,
 }
 
@@ -60,7 +63,7 @@ pub fn foveated(e: &Entry, s: &AppSettings) -> bool {
         && match (e.game.openvr.is_empty(), e.xr) {
             (false, _) => e.vr == State::On,
             (true, Some(xr)) => xr == State::On,
-            (true, None) => !e.game.exes.iter().any(|x| s.off_games.contains(x)),
+            (true, None) => !e.no_layer && !e.game.exes.iter().any(|x| s.off_games.contains(x)),
         }
 }
 
@@ -86,6 +89,7 @@ fn row(id: usize, e: &Entry, s: &AppSettings, now: u64) -> Row {
     let api = match (g.openvr.is_empty(), g.openxr) {
         (false, true) => "OpenVR + OpenXR",
         (false, false) => "OpenVR",
+        _ if g.vr_mod => "OpenXR (VR mod)",
         _ => "OpenXR",
     };
     // (badge, kind, detail, action, primary, can act)
@@ -171,6 +175,15 @@ fn row(id: usize, e: &Entry, s: &AppSettings, now: u64) -> Row {
                 false,
             ),
         },
+        None if e.no_layer => (
+            "Not installed",
+            3,
+            "FoveaXR's OpenXR layer is not registered for this Windows user, so OpenXR games start without it. \
+             Run Install.cmd from the folder you unzipped: it registers the layer, without admin rights.",
+            "Why?",
+            false,
+            false,
+        ),
         None if !foveated(e, s) => (
             "Off",
             1,
@@ -278,12 +291,14 @@ mod tests {
                 last_played: last,
                 openvr: if openvr { vec![PathBuf::from("x/openvr_api.dll")] } else { vec![] },
                 openxr: !openvr,
+                vr_mod: false,
                 exes: vec![format!("{}.exe", name.to_lowercase())],
                 block,
                 prefix: PathBuf::new(),
             },
             vr,
             xr: None,
+            no_layer: false,
             busy: false,
         }
     }
@@ -351,5 +366,29 @@ mod tests {
         assert_eq!(mid(&games).map(|r| (r.badge, r.can_act)), Some(("Not started".into(), false)));
         games[2].xr = Some(State::On);
         assert!(foveated(&games[2], &s));
+    }
+
+    #[test]
+    fn openxr_games_need_the_layer_registered() {
+        let s = AppSettings::default();
+        let mut games = list();
+        for g in &mut games {
+            g.no_layer = true;
+        }
+        let r = rows(&games, &s, "", Filter::All, false, 0);
+        let by = |n: &str| r.iter().find(|x| x.name == n).cloned();
+        assert_eq!(by("Mid").map(|x| (x.badge, x.can_act)), Some(("Not installed".into(), false)));
+        // OpenVR games go through their own DLL: the layer is nothing to them.
+        assert_eq!(by("Zeta").map(|x| x.badge), Some("On".into()));
+        assert_eq!(note(&games, &s), "5 games · 1 foveated");
+    }
+
+    #[test]
+    fn a_game_with_a_vr_mod_says_so() {
+        let s = AppSettings::default();
+        let mut games = list();
+        games[2].game.vr_mod = true;
+        let mid = rows(&games, &s, "mid", Filter::OpenXr, false, 0).into_iter().next();
+        assert_eq!(mid.map(|r| (r.api, r.badge)), Some(("OpenXR (VR mod) · played today".into(), "On".into())));
     }
 }

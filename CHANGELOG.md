@@ -13,4 +13,4 @@ First release.
   eight accent themes, a debug tint that shows the rings, Export logs.
 - Never active in games with anti-cheat, in VRChat or in games with their own foveated rendering.
 - Per-user install and uninstall without admin rights; uninstall puts every game's `openvr_api.dll` back.
-- Linux with Proton, experimental: Direct3D 12 games, not yet tested in a headset.
+- Linux with Proton, experimental: Direct3D 12 games.

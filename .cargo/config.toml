@@ -1,0 +1,4 @@
+# The C runtime is linked into FoveaXR.exe, as it is into the DLLs games load (CMAKE_MSVC_RUNTIME_LIBRARY): the app
+# starts on a Windows that has no Visual C++ redistributable installed.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

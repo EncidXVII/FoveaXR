@@ -11,7 +11,7 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::games::{self, Entry, Filter};
 use crate::openvr::{self, State};
@@ -74,21 +74,49 @@ pub struct Readout {
     pub valid: bool,
 }
 
-/// From the stats games publish: (process alive, stats) pairs.
-pub fn readout(slots: &[(bool, fov_shm::Stats)]) -> Readout {
+/// Frames a game may run before "no eye pass yet" is said of it (a loading screen has none).
+const SETTLED_FRAMES: u64 = 600;
+
+/// From the stats games publish: (process alive, stats) pairs. It says what is true of the running game now: that
+/// it is foveated at all, and whether eye tracking reaches it, not only what the switches ask for. `no_layer`: the
+/// OpenXR layer is not registered (Windows), so no OpenXR game will ever show up here.
+pub fn readout(slots: &[(bool, fov_shm::Stats)], settings: &AppSettings, no_layer: bool) -> Readout {
     let none = |text: String| Readout { text, ms: 0.0, pct: 0.0, valid: false };
     let Some(s) = slots.iter().filter(|(alive, _)| *alive).map(|(_, s)| s).max_by_key(|s| s.frames) else {
-        return none("No game running. Start a VR game: the saving shows here once you compare with Ctrl+F9.".into());
+        return none(if no_layer {
+            "Not installed: FoveaXR's OpenXR layer is not registered for this Windows user, so OpenXR games start \
+             without it. Run Install.cmd from the folder you unzipped."
+                .into()
+        } else {
+            "No game running. Start a VR game: the saving shows here once you compare with Ctrl+F9.".into()
+        });
     };
     let exe = s.exe();
     if let Some(why) = s.inactive_reason() {
         return none(format!("{exe}: not foveated, {why}."));
     }
+    if !settings.enabled {
+        return none(format!("{exe}: FoveaXR is in this game, switched off."));
+    }
+    // (An older core in a game never counts eye passes, only the foveated ones.)
+    if s.frames > SETTLED_FRAMES && s.eye_passes == 0 && s.rings_bound == 0 {
+        return none(format!(
+            "{exe}: FoveaXR is in this game, but found no eye pass to foveate: the game renders in a way it does \
+             not recognise yet. Export logs (Settings) and report the game."
+        ));
+    }
+    let eyes = s.gaze_valid_pct >= 50.0;
+    let mode = match (settings.eye_tracked, eyes) {
+        (true, true) => "eye-tracked",
+        (true, false) => "Fixed for now: no eye tracking reaches this game",
+        (false, true) => "Fixed (eye tracking is available here)",
+        (false, false) => "Fixed",
+    };
     if s.eye_ms_on > 0.0 && s.eye_ms_off > 0.0 {
         let ms = s.eye_ms_off - s.eye_ms_on;
-        return Readout { text: exe, ms, pct: 100.0 * ms / s.eye_ms_off, valid: true };
+        return Readout { text: format!("{exe}, {mode}"), ms, pct: 100.0 * ms / s.eye_ms_off, valid: true };
     }
-    none(format!("{exe}: foveated. Press Ctrl+F9 twice in VR to measure off against on."))
+    none(format!("{exe}: foveated, {mode}. Press Ctrl+F9 twice in VR to measure off against on."))
 }
 
 enum Done {
@@ -107,6 +135,8 @@ struct App {
     filter: Filter,
     by_played: bool,
     toasts: i32,
+    /// Windows: the OpenXR layer is not registered for this user (see `Entry::no_layer`).
+    no_layer: bool,
 }
 
 /// A game's OpenVR install state, and on Linux the OpenXR layer state in its Proton prefix.
@@ -123,23 +153,34 @@ fn now() -> u64 {
 
 fn show_rows(ui: &fov_ui::MainWindow, app: &App, rows: &VecModel<fov_ui::GameRow>) {
     let list = games::rows(&app.entries, &app.settings, &app.search, app.filter, app.by_played, now());
-    rows.set_vec(
-        list.into_iter()
-            .map(|r| fov_ui::GameRow {
-                id: r.id,
-                header: r.header,
-                name: SharedString::from(r.name),
-                api: SharedString::from(r.api),
-                badge: SharedString::from(r.badge),
-                badge_kind: r.badge_kind,
-                detail: SharedString::from(r.detail),
-                action: SharedString::from(r.action),
-                primary: r.primary,
-                can_act: r.can_act,
-                busy: r.busy,
-            })
-            .collect::<Vec<_>>(),
-    );
+    let list: Vec<_> = list
+        .into_iter()
+        .map(|r| fov_ui::GameRow {
+            id: r.id,
+            header: r.header,
+            name: SharedString::from(r.name),
+            api: SharedString::from(r.api),
+            badge: SharedString::from(r.badge),
+            badge_kind: r.badge_kind,
+            detail: SharedString::from(r.detail),
+            action: SharedString::from(r.action),
+            primary: r.primary,
+            can_act: r.can_act,
+            busy: r.busy,
+        })
+        .collect();
+    // Row by row, only what changed: replacing the whole model empties the list for a moment, and a list scrolled
+    // down jumped back to its top on every click of a row's button.
+    for (i, row) in list.iter().enumerate() {
+        match rows.row_data(i) {
+            Some(old) if old == *row => {}
+            Some(_) => rows.set_row_data(i, row.clone()),
+            None => rows.push(row.clone()),
+        }
+    }
+    for i in (list.len()..rows.row_count()).rev() {
+        rows.remove(i);
+    }
     ui.set_games_state(app.state);
     ui.set_games_note(games::note(&app.entries, &app.settings).into());
 }
@@ -171,6 +212,7 @@ pub fn run() -> Result<(), String> {
         filter: Filter::All,
         by_played: false,
         toasts: 0,
+        no_layer: !crate::platform::openxr_layer_registered(),
     }));
     let rows = Rc::new(VecModel::<fov_ui::GameRow>::default());
     ui.set_games(ModelRc::from(Rc::clone(&rows)));
@@ -220,6 +262,7 @@ pub fn run() -> Result<(), String> {
             });
         }
     });
+    ui.on_open_url(|url| crate::platform::open_url(&url));
 
     // Games list: search, filter and sort are re-applied on each change; the list itself is scanned once.
     let refilter = {
@@ -320,6 +363,8 @@ pub fn run() -> Result<(), String> {
     std::thread::spawn({
         let tx = tx.clone();
         move || {
+            // An update of the app brings a new proxy: the games enabled before get it (those not running now).
+            openvr::refresh(&proxy_dll());
             let profiles = steam::Profiles::load(&app_dir());
             let _ = tx.send(Done::Scan(steam::scan(&profiles)));
         }
@@ -355,11 +400,12 @@ pub fn run() -> Result<(), String> {
                     Done::Scan(Scan::NoSteam) => a.state = 1,
                     Done::Scan(Scan::Games(found)) => {
                         a.state = if found.is_empty() { 2 } else { 3 };
+                        let no_layer = a.no_layer;
                         a.entries = found
                             .into_iter()
                             .map(|game| {
                                 let (vr, xr) = states(&game);
-                                Entry { game, vr, xr, busy: false }
+                                Entry { game, vr, xr, no_layer, busy: false }
                             })
                             .collect();
                     }
@@ -404,7 +450,7 @@ pub fn run() -> Result<(), String> {
                     (now.duration_since(beat.1) < Duration::from_secs(3) && s.frames > 0, s)
                 })
                 .collect();
-            let r = readout(&slots);
+            let r = readout(&slots, &a.settings, a.no_layer);
             ui.set_status(r.text.into());
             ui.set_saved_ms(r.ms);
             ui.set_saved_pct(r.pct);

@@ -1241,6 +1241,7 @@ dependencies = [
 name = "fov-ui"
 version = "1.0.0"
 dependencies = [
+ "i-slint-core",
  "png",
  "serde_json",
  "slint",

@@ -115,7 +115,8 @@ pub struct Stats {
     pub uncertain_eye: u64,
     pub focus: [[f32; 2]; 2],
     pub ui_skipped: u64,
-    pub pad2: u64,
+    /// Eye passes the core recognised, foveated or not.
+    pub eye_passes: u64,
     pub last_error: [u8; 96],
 }
 

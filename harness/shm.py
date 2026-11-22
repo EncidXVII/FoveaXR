@@ -47,7 +47,7 @@ class Stats(ctypes.Structure):
         ("gaze_source", ctypes.c_uint32), ("gaze_valid_pct", ctypes.c_float), ("eye_ms_on", ctypes.c_float),
         ("eye_ms_off", ctypes.c_float), ("frames", ctypes.c_uint64), ("rings_bound", ctypes.c_uint64),
         ("uncertain_eye", ctypes.c_uint64), ("focus", (ctypes.c_float * 2) * 2), ("ui_skipped", ctypes.c_uint64),
-        ("pad2", ctypes.c_uint64), ("last_error", ctypes.c_char * 96),
+        ("eye_passes", ctypes.c_uint64), ("last_error", ctypes.c_char * 96),
     ]
 
 

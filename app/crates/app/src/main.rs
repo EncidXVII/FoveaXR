@@ -60,7 +60,7 @@ mod tests {
             uncertain_eye: 0,
             focus: [[0.5; 2]; 2],
             ui_skipped: 0,
-            pad2: 0,
+            eye_passes: 0,
             last_error: [0; 96],
         };
         s.exe[..exe.len()].copy_from_slice(exe.as_bytes());
@@ -69,11 +69,13 @@ mod tests {
 
     #[test]
     fn readout_for_the_running_game() {
-        use crate::ui::readout;
+        use crate::settings::AppSettings;
+        let on = AppSettings::default();
+        let readout = |slots: &[(bool, fov_shm::Stats)]| crate::ui::readout(slots, &on, false);
         assert!(!readout(&[]).valid);
         assert!(readout(&[(false, stats("old.exe", 9, 0, 1.0, 2.0))]).text.starts_with("No game running"));
         let r = readout(&[(true, stats("game.exe", 5, 0, 1.0, 2.0)), (true, stats("idle.exe", 1, 0, 0.0, 0.0))]);
-        assert!(r.valid && (r.ms - 1.0).abs() < 1e-6 && (r.pct - 50.0).abs() < 1e-4 && r.text == "game.exe");
+        assert!(r.valid && (r.ms - 1.0).abs() < 1e-6 && (r.pct - 50.0).abs() < 1e-4 && r.text == "game.exe, Fixed");
         assert!(readout(&[(true, stats("game.exe", 5, 0, 0.0, 0.0))]).text.contains("Ctrl+F9"));
         assert_eq!(
             readout(&[(true, stats("ac.exe", 5, 4, 0.0, 0.0))]).text,
@@ -81,5 +83,37 @@ mod tests {
         );
         let gpu = readout(&[(true, stats("old.exe", 5, 7, 0.0, 0.0))]);
         assert!(!gpu.valid && gpu.text.contains("no variable rate shading"));
+    }
+
+    #[test]
+    fn readout_says_what_is_true_of_the_game() {
+        use crate::settings::AppSettings;
+        use crate::ui::readout;
+        let fixed = AppSettings::default();
+        let eye = AppSettings { eye_tracked: true, ..AppSettings::default() };
+        let off = AppSettings { enabled: false, ..AppSettings::default() };
+        // The layer is not registered: said while nothing runs, where the user wonders why nothing shows up.
+        assert!(readout(&[], &fixed, true).text.starts_with("Not installed"));
+        // The switch is off: the game is not called foveated.
+        let game = stats("game.exe", 5000, 0, 0.0, 0.0);
+        assert_eq!(readout(&[(true, game)], &off, false).text, "game.exe: FoveaXR is in this game, switched off.");
+        // In the game, but none of its passes was recognised: not called foveated either. A game still loading
+        // (few frames) is given time.
+        assert!(readout(&[(true, game)], &fixed, false).text.contains("found no eye pass"));
+        assert!(
+            readout(&[(true, stats("game.exe", 100, 0, 0.0, 0.0))], &fixed, false).text.contains("foveated, Fixed")
+        );
+        // Eye-tracked is said only when eye data arrives in the game.
+        let mut seen = game;
+        seen.eye_passes = 40_000;
+        seen.rings_bound = 40_000;
+        assert!(readout(&[(true, seen)], &eye, false).text.contains("no eye tracking reaches this game"));
+        seen.gaze_source = 1;
+        seen.gaze_valid_pct = 97.0;
+        assert!(readout(&[(true, seen)], &eye, false).text.contains("foveated, eye-tracked."));
+        assert!(readout(&[(true, seen)], &fixed, false).text.contains("eye tracking is available"));
+        seen.eye_ms_on = 1.0;
+        seen.eye_ms_off = 2.0;
+        assert_eq!(readout(&[(true, seen)], &eye, false).text, "game.exe, eye-tracked");
     }
 }
