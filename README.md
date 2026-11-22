@@ -13,7 +13,7 @@
 foveation for every headset, eye-tracked (experimental) for Steam Frame and other eye-tracking headsets. It works in SteamVR
 (OpenVR) and OpenXR games without mods or per-game patches: install it, start the game, get GPU time back.
 
-**[Download the latest release](https://github.com/EncidXVII/FoveaXR/releases/latest)** · [Supported GPUs and games](#supported) · [Common questions](#common-questions) · [Limits](#limits)
+**[Download the latest release](https://github.com/EncidXVII/FoveaXR/releases/latest)** · [Guides and help on everyvr.net](https://everyvr.net/foveaxr) · [Supported GPUs and games](#supported) · [Common questions](#common-questions) · [Limits](#limits)
 
 > **Status: 1.0 on Windows, fixed foveation.** Eye-tracked mode and the Linux build are
 > experimental. Game reports (what a game saved, or that it saved nothing) are what it needs most:
@@ -197,7 +197,7 @@ Release zip: `installer\package.ps1`. Tests: `ctest --test-dir build -C Release`
 
 ## More PC VR tools from the same author
 
-Four free, open-source tools for PC VR by [EncidXVII](https://github.com/EncidXVII), with one look and one way of working:
+Four free, open-source tools for PC VR by [EncidXVII](https://github.com/EncidXVII), with one look and one way of working. Guides, downloads and news for all four: [everyvr.net](https://everyvr.net).
 
 | | |
 |---|---|

@@ -8,6 +8,7 @@ authors:
 version: 1.0.0
 license: GPL-3.0-or-later
 repository-code: "https://github.com/EncidXVII/FoveaXR"
+url: "https://everyvr.net/foveaxr"
 keywords:
   - virtual reality
   - foveated rendering
