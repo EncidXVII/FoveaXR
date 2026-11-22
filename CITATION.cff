@@ -6,6 +6,7 @@ abstract: "Free, open-source foveated rendering for PC VR games: an OpenXR API l
 authors:
   - alias: EncidXVII
 version: 1.0.0
+date-released: 2026-11-23
 license: GPL-3.0-or-later
 repository-code: "https://github.com/EncidXVII/FoveaXR"
 url: "https://everyvr.net/foveaxr"
