@@ -276,6 +276,7 @@ mod tests {
 
     #[test]
     fn enable_then_disable_restores_the_prefix() -> Result<(), String> {
+        let _config = crate::platform::CONFIG_DIR_LOCK.lock().map_err(|e| e.to_string())?;
         let pfx = std::env::temp_dir().join(format!("fov-proton-pfx-{}", std::process::id()));
         std::fs::create_dir_all(&pfx).map_err(|e| e.to_string())?;
         std::fs::write(pfx.join("user.reg"), REG).map_err(|e| e.to_string())?;

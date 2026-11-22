@@ -231,8 +231,8 @@ pub fn disable_all() -> Result<(), String> {
 mod tests {
     use super::*;
 
-    /// Tests that install and remove share the one records file: one at a time.
-    static RECORDS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    /// Tests that install and remove share the one records file and its folder: one at a time, crate-wide.
+    use crate::platform::CONFIG_DIR_LOCK as RECORDS;
 
     #[test]
     fn records_round_trip() {

@@ -14,6 +14,11 @@ fn xdg(var: &str, fallback: &str) -> Option<PathBuf> {
     env_path(var).or_else(|| env_path("HOME").map(|h| h.join(fallback)))
 }
 
+/// Tests that write the real config folder, and remove it when they made it, take this first: run side by side,
+/// one could delete the folder while another is writing its file there.
+#[cfg(test)]
+pub static CONFIG_DIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Settings and install records: %APPDATA%\FoveaXR, or $XDG_CONFIG_HOME/foveaxr.
 pub fn config_dir() -> Option<PathBuf> {
     #[cfg(windows)]
