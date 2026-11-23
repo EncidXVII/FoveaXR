@@ -1,0 +1,31 @@
+# Maintainer: EncidXVII
+# The AUR package, built from the published release. The AUR workflow (.github/workflows/aur.yml) sets pkgver and
+# the checksums from each new release and pushes it to aur.archlinux.org; the values here are the last ones.
+pkgname=foveaxr-bin
+pkgver=0.2.1
+pkgrel=1
+pkgdesc="Foveated rendering for Steam VR games under Proton"
+arch=('x86_64')
+url="https://everyvr.net/foveaxr"
+_repo="https://github.com/EncidXVII/FoveaXR"
+license=('GPL-3.0-or-later')
+depends=('fontconfig' 'gcc-libs' 'libxkbcommon' 'wayland' 'libx11' 'libxcursor' 'libxi' 'hicolor-icon-theme')
+optdepends=('steam: SteamVR and Proton')
+provides=('foveaxr')
+conflicts=('foveaxr')
+install=foveaxr-bin.install
+source=("$_repo/releases/download/v$pkgver/FoveaXR-$pkgver-linux-x86_64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "FoveaXR-$pkgver-linux-x86_64"
+  # The app and the Windows DLLs games load under Proton stay together in /opt/foveaxr, a path that stays the same
+  # across updates: each enabled game points at it.
+  install -d "$pkgdir/opt/foveaxr" "$pkgdir/usr/bin"
+  cp -r foveaxr fov_openxr_layer.dll fov_openxr_layer.json openvr_proxy profiles README.md "$pkgdir/opt/foveaxr/"
+  ln -s /opt/foveaxr/foveaxr "$pkgdir/usr/bin/foveaxr"
+  install -Dm644 foveaxr.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/foveaxr.png"
+  sed 's|@EXEC@|foveaxr|' foveaxr.desktop > foveaxr.desktop.out
+  install -Dm644 foveaxr.desktop.out "$pkgdir/usr/share/applications/foveaxr.desktop"
+  install -Dm644 LICENSE NOTICE THIRD_PARTY_NOTICES.md -t "$pkgdir/usr/share/licenses/foveaxr/"
+}

@@ -1,0 +1,7 @@
+pre_remove() {
+  echo "Before removing FoveaXR, open it and Disable each game in its Games tab, so no game keeps looking for it."
+}
+
+post_upgrade() {
+  echo "FoveaXR updated. Games that were enabled keep working: they point at /opt/foveaxr."
+}
