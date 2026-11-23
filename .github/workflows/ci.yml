@@ -4,7 +4,7 @@ jobs:
   rust:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -19,17 +19,17 @@ jobs:
   native:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: cmake -S . -B build
       - run: cmake --build build --config Release --parallel
       - run: ctest --test-dir build -C Release --output-on-failure
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       # Layout of the shared memory and the test gaze source end to end (no GPU or SteamVR needed).
       - run: python -m unittest discover -s harness/tests -v
       # The DLLs games load, for the Linux tarball (Proton runs them).
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-dlls
           path: |
@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: native
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libxkbcommon-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -49,12 +49,12 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       - run: cargo build --release -p fov-app
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: windows-dlls
           path: windows-dlls
       - run: sh installer/linux/package.sh target/release/FoveaXR windows-dlls
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-tarball
           path: dist/*.tar.gz*
