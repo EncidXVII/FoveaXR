@@ -65,6 +65,9 @@ more testing.**
 3. In the **Games** tab, **Enable** each game, with the game closed. OpenVR games get the `openvr_api.dll` swap as on
    Windows; OpenXR games get our layer registered in their own Proton prefix (start a game once first so it has one).
 
+**NixOS or Nix:** `nix run github:EncidXVII/FoveaXR`, or `nix profile install github:EncidXVII/FoveaXR` to keep it,
+replaces steps 1 and 2: the same files, kept in `~/.local/share/foveaxr` and run from there.
+
 Uninstall: `~/.local/share/foveaxr/uninstall.sh` (every game and prefix put back, then the app removed).
 
 What is expected to work under Proton, from the translation layers' public source: **D3D12 games** (vkd3d-proton
