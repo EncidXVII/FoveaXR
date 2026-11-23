@@ -1219,7 +1219,7 @@ dependencies = [
 
 [[package]]
 name = "fov-app"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "fov-shm",
  "fov-ui",
@@ -1231,7 +1231,7 @@ dependencies = [
 
 [[package]]
 name = "fov-shm"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "libc",
  "windows",
@@ -1239,7 +1239,7 @@ dependencies = [
 
 [[package]]
 name = "fov-ui"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "i-slint-core",
  "png",

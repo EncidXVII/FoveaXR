@@ -44,7 +44,7 @@ Real games save less: how much depends on how much of their frame is pixel shadi
 
 ## Install (Windows)
 
-1. Download `FoveaXR-0.2.0.zip` from Releases, check it against `FoveaXR-0.2.0.zip.sha256`, unzip.
+1. Download `FoveaXR-0.2.1.zip` from Releases, check it against `FoveaXR-0.2.1.zip.sha256`, unzip.
 2. Run `Install.cmd`. No admin rights: it installs for your Windows user only and starts the app (tray icon).
 3. OpenXR games are foveated from their next start. OpenVR games: open the app's **Games** tab and press **Enable**.
 
@@ -59,7 +59,7 @@ OpenXR layer, settings and logs.
 For SteamVR on Linux with games running under Proton. **Experimental: requires
 more testing.**
 
-1. Download `FoveaXR-0.2.0-linux-x86_64.tar.gz`, check it against its `.sha256`, unpack.
+1. Download `FoveaXR-0.2.1-linux-x86_64.tar.gz`, check it against its `.sha256`, unpack.
 2. Run `./install.sh`: per user, no root (`~/.local/share/foveaxr`, a menu entry). The tray icon needs a
    StatusNotifier host: KDE has one, GNOME needs the AppIndicator extension; without it the window is the app.
 3. In the **Games** tab, **Enable** each game, with the game closed. OpenVR games get the `openvr_api.dll` swap as on

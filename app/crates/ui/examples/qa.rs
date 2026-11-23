@@ -69,7 +69,7 @@ fn save(s: &mut Surface<MainWindow>, out: &Path, name: &str) -> Result<(), Box<d
 fn window(w: u32, h: u32) -> Result<Surface<MainWindow>, Box<dyn std::error::Error>> {
     let s = Surface::new(MainWindow::new, w, h)?;
     s.ui.global::<Mode>().set_reduce_motion(true);
-    s.ui.set_version("0.2.0".into());
+    s.ui.set_version("0.2.1".into());
     Ok(s)
 }
 

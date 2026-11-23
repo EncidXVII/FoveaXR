@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 - 2026-11-23
+
+- About lists the maker's profiles as GitHub, X, Threads, with X at its new address (x.com/EncidXVII).
+- Packages for Linux: a Nix flake (`nix run github:EncidXVII/FoveaXR`) and an AUR package (`foveaxr-bin`), both
+  built from the release files.
+
 ## 0.2.0 - 2026-11-23
 
 First release.
