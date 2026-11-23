@@ -3,6 +3,25 @@
 
 # Builds the release zip: dist\FoveaXR-<version>.zip and its .sha256.
 #   installer\package.ps1
+# Compress-Archive in Windows PowerShell 5.1 names entries "dir\file", which Linux tools and some extractors read
+# as one file with a backslash in its name. This writes "dir/file", as the zip format specifies. Like
+# Compress-Archive, a folder goes in under its own name and a file at the top.
+function New-Zip([string]$Zip, [string[]]$Paths) {
+    Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+    if (Test-Path $Zip) { Remove-Item $Zip }
+    $archive = [IO.Compression.ZipFile]::Open($Zip, 'Create')
+    try {
+        foreach ($path in $Paths) {
+            $item = Get-Item $path
+            $base = Split-Path $item.FullName -Parent
+            $files = if ($item.PSIsContainer) { Get-ChildItem $item.FullName -Recurse -File } else { @($item) }
+            foreach ($file in $files) {
+                $name = $file.FullName.Substring($base.Length + 1).Replace('\', '/')
+                [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.FullName, $name, 'Optimal')
+            }
+        }
+    } finally { $archive.Dispose() }
+}
 $root = Split-Path $PSScriptRoot
 $version = (Select-String -Path (Join-Path $root "CMakeLists.txt") -Pattern 'project\(FoveaXR VERSION ([0-9.]+)').Matches[0].Groups[1].Value
 cmake -S $root -B (Join-Path $root "build") | Out-Null
@@ -31,7 +50,7 @@ Set-Content -Encoding ascii "$out\Install.cmd" "@powershell -NoProfile -Executio
 
 $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item $zip }
-Compress-Archive -Path $out -DestinationPath $zip
+New-Zip $zip @($out)
 $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
 # LF, not CRLF: `sha256sum -c` on Linux reads a CR as part of the file name.
 [IO.File]::WriteAllText("$zip.sha256", "$hash  $name.zip`n")
