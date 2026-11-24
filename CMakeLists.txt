@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.24)
-project(FoveaXR VERSION 0.4.0 LANGUAGES C CXX ASM_MASM)
+project(FoveaXR VERSION 0.4.1 LANGUAGES C CXX ASM_MASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

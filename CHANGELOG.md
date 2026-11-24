@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 - 2026-11-24
 
 - Linux: a game added by hand that Flatpak or Snap Steam runs (as a non-Steam game) gets the copy of FoveaXR's files
   in that sandbox's folder when enabled, as its Steam games do, so its proxy finds them. It counts as that Steam's
   when it is in the sandbox's folder, or when that Steam is the only one on the PC.
 - Linux: user.reg, its backup and the layer records are written whole or not at all.
+- The tray icon library is built without GTK, which only its Linux tray used: the tray is Windows only.
 
 ## 0.4.0 - 2026-11-24
 
