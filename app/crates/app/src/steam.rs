@@ -110,13 +110,24 @@ fn libraries(root: &Path, sandbox: Option<Sandbox>) -> Vec<PathBuf> {
     libs
 }
 
-/// The sandboxed Steam whose library holds this path (a game's DLL, a Proton prefix), if any.
+/// The sandboxed Steam whose games use this path (a game's DLL, a Proton prefix), if any: the one whose library
+/// holds it. A game added by hand lies in no library: it is taken as a sandboxed Steam's when it is in that sandbox's
+/// home, or when that Steam is the only one on this PC, so its proxy finds FoveaXR's files in the sandbox's copy.
 pub fn sandbox_of(path: &Path) -> Option<Sandbox> {
-    crate::platform::steam_roots()
-        .into_iter()
-        .filter_map(|(root, sandbox)| Some((root, sandbox?)))
-        .find(|(root, s)| libraries(root, Some(*s)).iter().any(|lib| path.starts_with(lib)))
-        .map(|(_, s)| s)
+    let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let roots = crate::platform::steam_roots();
+    if let Some((_, lib_of)) =
+        roots.iter().find(|(root, s)| libraries(root, *s).iter().any(|lib| path.starts_with(lib)))
+    {
+        return *lib_of;
+    }
+    if let Some(s) = Sandbox::ALL.into_iter().find(|s| s.home().is_some_and(|h| path.starts_with(h))) {
+        return Some(s);
+    }
+    match roots.first() {
+        Some((_, Some(s))) if roots.iter().all(|(_, other)| *other == Some(*s)) => Some(*s),
+        _ => None,
+    }
 }
 
 fn is_x64(dll: &Path) -> bool {
@@ -230,7 +241,8 @@ pub fn folder(dir: &Path, profiles: &Profiles) -> Result<Game, String> {
         prefix: PathBuf::new(),
         dir: dir.to_path_buf(),
         added: true,
-        sandbox: None,
+        // Linux: the Steam that runs it, when that is Flatpak's or Snap's.
+        sandbox: if cfg!(unix) { sandbox_of(dir) } else { None },
     };
     let game = classify(game, profiles).ok_or_else(|| {
         format!("No VR game in {}: FoveaXR looks for openvr_api.dll or openxr_loader.dll in it", dir.display())

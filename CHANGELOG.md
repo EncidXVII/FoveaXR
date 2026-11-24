@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Linux: a game added by hand that Flatpak or Snap Steam runs (as a non-Steam game) gets the copy of FoveaXR's files
+  in that sandbox's folder when enabled, as its Steam games do, so its proxy finds them. It counts as that Steam's
+  when it is in the sandbox's folder, or when that Steam is the only one on the PC.
+- Linux: user.reg, its backup and the layer records are written whole or not at all.
+
 ## 0.4.0 - 2026-11-24
 
 - Linux: a game that ships both OpenVR and OpenXR gets our OpenXR layer in its Proton prefix too when enabled, so it
