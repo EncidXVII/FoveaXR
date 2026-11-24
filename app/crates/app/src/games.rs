@@ -308,6 +308,7 @@ mod tests {
                 prefix: PathBuf::new(),
                 dir: PathBuf::new(),
                 added: false,
+                sandbox: None,
             },
             vr,
             xr: None,

@@ -374,7 +374,7 @@ component GameLine inherits Rectangle {
 
 component GamesPage inherits FocusScope {
     in property <[GameRow]> games;
-    // 0 looking, 1 no Steam, 2 no VR games, 3 a list, 4 only Flatpak or Snap Steam (Linux).
+    // 0 looking, 1 no Steam, 2 no VR games, 3 a list.
     in property <int> state;
     in property <bool> linux;
     in property <string> note;
@@ -692,7 +692,6 @@ component GamesPage inherits FocusScope {
                         : root.state == 1 && root.linux ? "Steam isn't installed in your home folder."
                         : root.state == 1 ? "Steam isn't installed for this Windows user."
                         : root.state == 2 ? "No VR games in your Steam libraries."
-                        : root.state == 4 ? "Flatpak and Snap Steam aren't supported yet."
                         : root.search != "" ? "No games match \"" + root.search + "\"." : "No games in this view.";
                 }
                 Caption {
@@ -702,10 +701,9 @@ component GamesPage inherits FocusScope {
                         : root.state == 1 ? "OpenXR games from other stores are foveated without being listed. For an OpenVR game, add its folder."
                         : root.state == 2 && root.linux ? "Install a VR game and reopen FoveaXR, or add a game's folder."
                         : root.state == 2 ? "Install a VR game and reopen FoveaXR, or add a game's folder. OpenXR games are foveated without being listed."
-                        : root.state == 4 ? "Their sandbox can't see FoveaXR's files. Install Steam from your distribution's packages, or add an OpenVR game's folder."
                         : root.state == 3 ? "Try another filter or a shorter search." : "";
                 }
-                if root.state == 1 || root.state == 2 || root.state == 4: HorizontalLayout {
+                if root.state == 1 || root.state == 2: HorizontalLayout {
                     alignment: center;
                     Button {
                         icon: Icons.add;

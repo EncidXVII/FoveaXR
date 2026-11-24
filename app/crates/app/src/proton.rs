@@ -9,10 +9,14 @@
 //! game ran (Wine rewrites the whole file on exit), only our value is taken out, and the key too if we added it.
 //! Wine keeps the registry in memory while the prefix runs and writes it back on exit, so a running prefix is never
 //! edited.
+//!
+//! Flatpak and Snap Steam can't see FoveaXR's install folder: their games get a copy of the layer and the profiles in
+//! the sandbox's own folder, made on enable, updated with the app, and removed once no game there uses it.
 
 use std::path::{Path, PathBuf};
 
 use crate::openvr::{State, hash};
+use crate::platform::Sandbox;
 
 const KEY: &str = r"Software\\Khronos\\OpenXR\\1\\ApiLayers\\Implicit";
 const BACKUP: &str = "user.reg.fov-backup";
@@ -20,6 +24,8 @@ const BACKUP: &str = "user.reg.fov-backup";
 #[derive(Clone, Debug, PartialEq)]
 pub struct Install {
     pub reg: PathBuf,
+    /// The value we added: the manifest's path as the game sees it (empty in records from before it was kept).
+    pub name: String,
     /// Hash of user.reg as we left it: unchanged since means the backup can go back as it is.
     pub written: u64,
     /// We added the key (it was not there before), so it goes when our value goes.
@@ -91,13 +97,14 @@ pub fn parse(text: &str) -> Vec<Install> {
     for line in text.lines() {
         if line.trim() == "[[layer]]" {
             out.extend(cur.take());
-            cur = Some(Install { reg: PathBuf::new(), written: 0, created_key: false });
+            cur = Some(Install { reg: PathBuf::new(), name: String::new(), written: 0, created_key: false });
             continue;
         }
         let (Some(c), Some((k, v))) = (cur.as_mut(), line.split_once('=')) else { continue };
         let v = v.trim().trim_matches('"');
         match k.trim() {
             "reg" => c.reg = PathBuf::from(v.replace("\\\\", "\\")),
+            "name" => c.name = v.replace("\\\\", "\\"),
             "written" => c.written = u64::from_str_radix(v, 16).unwrap_or(0),
             "created_key" => c.created_key = v == "true",
             _ => {}
@@ -112,8 +119,9 @@ pub fn render(records: &[Install]) -> String {
         .iter()
         .map(|r| {
             format!(
-                "[[layer]]\nreg = \"{}\"\nwritten = \"{:016x}\"\ncreated_key = {}\n",
+                "[[layer]]\nreg = \"{}\"\nname = \"{}\"\nwritten = \"{:016x}\"\ncreated_key = {}\n",
                 r.reg.display().to_string().replace('\\', "\\\\"),
+                r.name.replace('\\', "\\\\"),
                 r.written,
                 r.created_key
             )
@@ -140,23 +148,27 @@ fn save(records: &[Install]) -> Result<(), String> {
     std::fs::write(p, render(records)).map_err(|e| e.to_string())
 }
 
-/// Whether a Wine process of this prefix runs (it would overwrite our edit when it exits).
+/// The WINEPREFIX values a process of this prefix may have: its path, or the path its sandbox sees (`inside`), with
+/// or without a final slash.
+fn prefix_vars(pfx: &Path, inside: Option<PathBuf>) -> Vec<String> {
+    std::iter::once(pfx.to_path_buf())
+        .chain(inside)
+        .flat_map(|p| [format!("WINEPREFIX={}", p.display()), format!("WINEPREFIX={}/", p.display())])
+        .collect()
+}
+
+/// Whether a Wine process of this prefix runs (it would overwrite our edit when it exits). A game of Flatpak Steam
+/// names its prefix as the sandbox sees it.
 fn running(pfx: &Path) -> bool {
-    #[cfg(unix)]
-    {
-        let want = format!("WINEPREFIX={}", pfx.display());
-        let Ok(procs) = std::fs::read_dir("/proc") else { return false };
-        procs.flatten().any(|p| {
-            std::fs::read(p.path().join("environ")).is_ok_and(|env| {
-                env.split(|b| *b == 0).any(|v| v == want.as_bytes() || v == format!("{want}/").as_bytes())
-            })
-        })
+    if cfg!(not(unix)) {
+        return false;
     }
-    #[cfg(not(unix))]
-    {
-        let _ = pfx;
-        false
-    }
+    let want = prefix_vars(pfx, Sandbox::ALL.into_iter().find_map(|s| s.seen_inside(pfx)));
+    let Ok(procs) = std::fs::read_dir("/proc") else { return false };
+    procs.flatten().any(|p| {
+        std::fs::read(p.path().join("environ"))
+            .is_ok_and(|env| env.split(|b| *b == 0).any(|v| want.iter().any(|w| v == w.as_bytes())))
+    })
 }
 
 pub fn state(pfx: &Path, manifest: &str, records: &[Install]) -> State {
@@ -185,7 +197,7 @@ pub fn enable(pfx: &Path, manifest: &str, now: u64) -> Result<(), String> {
     let (text, created_key) = add_value(&String::from_utf8_lossy(&original), manifest, now);
     std::fs::write(pfx.join(BACKUP), &original).map_err(|e| e.to_string())?;
     std::fs::write(&reg, text.as_bytes()).map_err(|e| e.to_string())?;
-    records.push(Install { reg, written: hash(text.as_bytes()), created_key });
+    records.push(Install { reg, name: manifest.to_owned(), written: hash(text.as_bytes()), created_key });
     save(&records)
 }
 
@@ -201,7 +213,9 @@ pub fn disable(pfx: &Path, manifest: &str) -> Result<(), String> {
     save(&records)
 }
 
+/// `manifest`: the value to take out when the record does not name it.
 fn restore(r: &Install, manifest: &str) -> Result<(), String> {
+    let manifest = if r.name.is_empty() { manifest } else { &r.name };
     let backup = r.reg.with_file_name(BACKUP);
     match std::fs::read(&r.reg) {
         // Untouched since: the original, byte for byte.
@@ -229,6 +243,52 @@ pub fn disable_all(manifest: &str) -> Result<(), String> {
         if let Some(pfx) = r.reg.parent() {
             result = result.and(disable(pfx, manifest));
         }
+    }
+    result
+}
+
+/// Copies FoveaXR's layer files, (source, path in the copy), into a sandbox's folder. Each is written beside its old
+/// copy and renamed over it, so a game running the old one keeps it; a file already the same is left alone.
+pub fn copy_into(dir: &Path, files: &[(PathBuf, PathBuf)]) -> Result<(), String> {
+    for (src, rel) in files {
+        let bytes = std::fs::read(src).map_err(|e| format!("{}: {e}", src.display()))?;
+        let dest = dir.join(rel);
+        if std::fs::read(&dest).is_ok_and(|b| b == bytes) {
+            continue;
+        }
+        let mut tmp = dest.clone().into_os_string();
+        tmp.push(".fov-new");
+        std::fs::create_dir_all(dest.parent().unwrap_or(dir))
+            .and_then(|()| std::fs::write(&tmp, &bytes))
+            .and_then(|()| std::fs::rename(&tmp, &dest))
+            .map_err(|e| format!("{}: {e}", dest.display()))?;
+    }
+    Ok(())
+}
+
+/// After the app was updated: each sandbox's copy gets the new files.
+pub fn refresh_copies(files: &[(PathBuf, PathBuf)]) {
+    for dir in Sandbox::ALL.into_iter().filter_map(Sandbox::data_dir).filter(|d| d.is_dir()) {
+        let _ = copy_into(&dir, files);
+    }
+}
+
+/// Each sandbox's copy goes once no game of its Steam has FoveaXR enabled (a prefix's layer, an OpenVR proxy).
+pub fn prune_copies() -> Result<(), String> {
+    let copies: Vec<(Sandbox, PathBuf)> =
+        Sandbox::ALL.into_iter().filter_map(|s| Some((s, s.data_dir().filter(|d| d.exists())?))).collect();
+    if copies.is_empty() {
+        return Ok(());
+    }
+    let used: Vec<Sandbox> = load()
+        .into_iter()
+        .map(|r| r.reg)
+        .chain(crate::openvr::load().into_iter().map(|r| r.dll))
+        .filter_map(|p| crate::steam::sandbox_of(&p))
+        .collect();
+    let mut result = Ok(());
+    for (_, dir) in copies.into_iter().filter(|(s, _)| !used.contains(s)) {
+        result = result.and(std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display())));
     }
     result
 }
@@ -268,10 +328,45 @@ mod tests {
     fn records_round_trip() {
         let r = vec![Install {
             reg: PathBuf::from("/home/u/steamapps/compatdata/1/pfx/user.reg"),
+            name: NAME.into(),
             written: 7,
             created_key: true,
         }];
         assert_eq!(parse(&render(&r)), r);
+        // A record from before the value was kept: the caller's manifest is taken out.
+        let old = parse("[[layer]]\nreg = \"/p/user.reg\"\nwritten = \"07\"\ncreated_key = true\n");
+        assert_eq!(old.first().map(|r| r.name.as_str()), Some(""));
+    }
+
+    #[test]
+    fn a_flatpak_prefix_is_named_as_the_sandbox_sees_it() {
+        let host = Path::new("/home/u/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/compatdata/1/pfx");
+        let inside = PathBuf::from("/home/u/.local/share/Steam/steamapps/compatdata/1/pfx");
+        let vars = prefix_vars(host, Some(inside));
+        assert!(vars.contains(&format!("WINEPREFIX={}", host.display())));
+        assert!(vars.contains(&"WINEPREFIX=/home/u/.local/share/Steam/steamapps/compatdata/1/pfx/".to_owned()));
+        assert_eq!(prefix_vars(Path::new("/p"), None), ["WINEPREFIX=/p", "WINEPREFIX=/p/"]);
+    }
+
+    #[test]
+    fn copies_replace_only_what_changed() -> Result<(), String> {
+        let dir = std::env::temp_dir().join(format!("fov-proton-copy-{}", std::process::id()));
+        let (src, copy) = (dir.join("src"), dir.join("copy"));
+        std::fs::create_dir_all(src.join("profiles")).map_err(|e| e.to_string())?;
+        std::fs::write(src.join("layer.dll"), b"1.0").map_err(|e| e.to_string())?;
+        std::fs::write(src.join("profiles/a.toml"), b"a").map_err(|e| e.to_string())?;
+        let files = [
+            (src.join("layer.dll"), PathBuf::from("layer.dll")),
+            (src.join("profiles/a.toml"), PathBuf::from("profiles/a.toml")),
+        ];
+        copy_into(&copy, &files)?;
+        assert_eq!(std::fs::read(copy.join("profiles/a.toml")).ok().as_deref(), Some(&b"a"[..]));
+        std::fs::write(src.join("layer.dll"), b"1.1").map_err(|e| e.to_string())?;
+        copy_into(&copy, &files)?;
+        assert_eq!(std::fs::read(copy.join("layer.dll")).ok().as_deref(), Some(&b"1.1"[..]));
+        assert!(!copy.join("layer.dll.fov-new").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+        Ok(())
     }
 
     #[test]
@@ -287,6 +382,13 @@ mod tests {
         assert_eq!(state(&pfx, NAME, &load()), State::On);
         disable(&pfx, NAME)?;
         assert_eq!(std::fs::read_to_string(pfx.join("user.reg")).ok().as_deref(), Some(REG));
+        // Wine rewrote user.reg since: the value the record names is taken out, whatever the caller passes now.
+        enable(&pfx, NAME, 1_732_000_000)?;
+        let ran = std::fs::read_to_string(pfx.join("user.reg")).map_err(|e| e.to_string())? + "\n[Game] 1\n";
+        std::fs::write(pfx.join("user.reg"), ran).map_err(|e| e.to_string())?;
+        disable(&pfx, r"Z:\elsewhere.json")?;
+        let text = std::fs::read_to_string(pfx.join("user.reg")).map_err(|e| e.to_string())?;
+        assert!(!text.contains("fov_openxr_layer") && text.contains("[Game] 1"));
         assert!(!pfx.join(BACKUP).exists());
         assert_eq!(state(&pfx, NAME, &load()), State::Off);
         assert_eq!(load(), before);

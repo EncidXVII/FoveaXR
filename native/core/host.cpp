@@ -3,7 +3,9 @@
 
 // Where the core finds the app's files. On Windows: the user's AppData folders. Inside Wine/Proton the game sees a
 // Windows profile of its own prefix, but the app runs natively on Linux, so the shared files live in the Linux
-// home's XDG folders, reached through Wine's Z: drive (the Linux root).
+// home's XDG folders, reached through Wine's Z: drive (the Linux root). Flatpak and Snap Steam see a home folder of
+// their own (the app finds it at ~/.var/app/com.valvesoftware.Steam or ~/snap/steam/common), so there the folders
+// are under that home.
 #include <windows.h>
 #include "fov_frame.h"
 
@@ -20,9 +22,11 @@ std::wstring backslashes(std::wstring p) {
     return p;
 }
 
-// $XDG_<kind>_HOME, else ~/<fallback>, as a Z: path; empty if the Linux home is unknown.
+// $XDG_<kind>_HOME, else ~/<fallback>, as a Z: path; empty if the Linux home is unknown. In a sandbox only the home
+// fallback: the sandbox sets these variables to the same folders, and one passed through from the desktop names a
+// folder the sandbox can't reach.
 std::wstring xdg(const wchar_t* var, const wchar_t* fallback) {
-    std::wstring dir = env(var);
+    std::wstring dir = fov::in_sandbox() ? L"" : env(var);
     if (!dir.empty()) return L"Z:" + backslashes(dir);
     std::wstring home = env(L"HOME");
     if (!home.empty()) return L"Z:" + backslashes(home + L"/" + fallback);
@@ -41,6 +45,15 @@ extern "C" int fov_is_wine(void) {
 }
 
 namespace fov {
+
+bool in_sandbox() {
+    // Flatpak: FLATPAK_ID, or its /.flatpak-info. Snap: SNAP, or a home folder under ~/snap.
+    static const bool sandboxed =
+        fov_is_wine() && (!env(L"FLATPAK_ID").empty() || !env(L"SNAP").empty() ||
+                          GetFileAttributesW(L"Z:\\.flatpak-info") != INVALID_FILE_ATTRIBUTES ||
+                          env(L"HOME").find(L"/snap/") != std::wstring::npos);
+    return sandboxed;
+}
 
 std::wstring host_dir(Host kind) {
     if (fov_is_wine()) {

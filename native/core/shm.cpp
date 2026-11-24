@@ -5,6 +5,9 @@
 #include <windows.h>
 #include <atomic>
 #include <cstring>
+#include <filesystem>
+#include <string>
+#include "fov_frame.h"
 
 namespace {
 FovShm* g_shm = nullptr;
@@ -43,10 +46,18 @@ extern "C" int fov_shm_connect(void) {
     tried = true;
     // Inside Wine a named section is invisible to Linux processes: the app there maps /dev/shm/FoveaXR.v1, which
     // Wine shows as Z:\dev\shm\FoveaXR.v1, and a file mapping of it shares the same pages. FOV_SHM_FILE forces
-    // the file path anywhere (tests on Windows).
+    // the file path anywhere (tests on Windows). Flatpak and Snap Steam have a /dev/shm of their own: there the file
+    // is FoveaXR.v1 in the logs' folder under the sandbox's home, where the app maps it too.
     wchar_t file_path[MAX_PATH] = L"";
-    if (!GetEnvironmentVariableW(L"FOV_SHM_FILE", file_path, MAX_PATH) && fov_is_wine())
-        wcscpy_s(file_path, L"Z:\\dev\\shm\\FoveaXR.v1");
+    if (!GetEnvironmentVariableW(L"FOV_SHM_FILE", file_path, MAX_PATH) && fov_is_wine()) {
+        if (!fov::in_sandbox()) {
+            wcscpy_s(file_path, L"Z:\\dev\\shm\\FoveaXR.v1");
+        } else if (std::wstring dir = fov::host_dir(fov::Host::State); !dir.empty()) {
+            std::error_code ignored;
+            std::filesystem::create_directories(dir, ignored);
+            wcsncpy_s(file_path, (dir + L"\\FoveaXR.v1").c_str(), _TRUNCATE);
+        }
+    }
     HANDLE file = INVALID_HANDLE_VALUE;
     if (file_path[0]) {
         file = CreateFileW(file_path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,

@@ -5,7 +5,8 @@
 //!
 //! Windows: the named section the core maps too. Linux: the file /dev/shm/FoveaXR.v1, which the core inside
 //! Wine/Proton maps as Z:\dev\shm\FoveaXR.v1 (a named Wine section is invisible to Linux processes). The file
-//! FOV_SHM_FILE names replaces either, for tests.
+//! FOV_SHM_FILE names replaces either, for tests. Flatpak and Snap Steam have a /dev/shm of their own: the app also
+//! maps a file under each sandbox's home (`Mapping::open_file`), where the core inside the sandbox maps it.
 #![allow(unsafe_code)]
 
 use std::ptr::{addr_of_mut, read_volatile, write_volatile};
@@ -44,12 +45,12 @@ mod os {
         view: MEMORY_MAPPED_VIEW_ADDRESS,
     }
 
-    pub fn map() -> Result<(View, *mut Shm), String> {
+    pub fn map(path: Option<std::path::PathBuf>) -> Result<(View, *mut Shm), String> {
         let size = u32::try_from(size_of::<Shm>()).map_err(|e| e.to_string())?;
         // SAFETY: plain Win32 calls; every handle is checked and closed in Drop, the view checked for null.
         unsafe {
             let mut file = INVALID_HANDLE_VALUE;
-            if let Some(path) = super::file_path() {
+            if let Some(path) = path {
                 let p = HSTRING::from(path.as_os_str());
                 file = CreateFileW(
                     PCWSTR(p.as_ptr()),
@@ -104,8 +105,8 @@ mod os {
         addr: *mut libc::c_void,
     }
 
-    pub fn map() -> Result<(View, *mut Shm), String> {
-        let path = super::file_path().ok_or("no shared memory path")?;
+    pub fn map(path: Option<std::path::PathBuf>) -> Result<(View, *mut Shm), String> {
+        let path = path.ok_or("no shared memory path")?;
         let size = size_of::<Shm>();
         let file = std::fs::OpenOptions::new()
             .read(true)
@@ -157,7 +158,16 @@ unsafe impl Send for Mapping {}
 impl Mapping {
     /// Opens or creates the mapping; fills the header and default settings if no one has yet.
     pub fn open() -> Result<Self, String> {
-        let (view, shm) = os::map()?;
+        Self::map(file_path())
+    }
+
+    /// The mapping backed by this file, created if missing (its folder must exist).
+    pub fn open_file(path: &std::path::Path) -> Result<Self, String> {
+        Self::map(Some(path.to_path_buf()))
+    }
+
+    fn map(path: Option<std::path::PathBuf>) -> Result<Self, String> {
+        let (view, shm) = os::map(path)?;
         let m = Self { _view: view, shm };
         // SAFETY: shm points at a live view of size_of::<Shm>() bytes.
         unsafe {
@@ -269,6 +279,26 @@ mod tests {
             Ok(())
         })();
         unsafe { std::env::remove_var("FOV_SHM_FILE") };
+        let _ = std::fs::remove_file(&path);
+        result
+    }
+
+    /// A sandbox's file, named outright: the same pages as a mapping through FOV_SHM_FILE.
+    #[test]
+    fn a_named_file_is_shared() -> Result<(), String> {
+        let _env = ENV.lock().map_err(|e| e.to_string())?;
+        let path = std::env::temp_dir().join(format!("fov-shm-named-{}", std::process::id()));
+        let result = (|| {
+            let a = Mapping::open_file(&path)?;
+            let s = Settings::preset(preset::HIGH);
+            a.write_settings(&s);
+            // SAFETY (env): tests touching FOV_SHM_FILE hold ENV, so nothing reads the environment meanwhile.
+            unsafe { std::env::set_var("FOV_SHM_FILE", &path) };
+            let b = Mapping::open();
+            unsafe { std::env::remove_var("FOV_SHM_FILE") };
+            assert_eq!(b?.settings(), Some(s));
+            Ok(())
+        })();
         let _ = std::fs::remove_file(&path);
         result
     }

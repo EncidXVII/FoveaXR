@@ -4,8 +4,12 @@
 
 - Linux: a game that ships both OpenVR and OpenXR gets our OpenXR layer in its Proton prefix too when enabled, so it
   is foveated whichever of the two it renders through.
-- Linux: Flatpak and Snap Steam are no longer listed as if they worked. Their sandbox can't see FoveaXR's files; the
-  Games page now says they aren't supported yet.
+- Linux: Flatpak and Snap Steam games are listed and can be enabled (Experimental). Library paths Flatpak Steam writes
+  as its sandbox sees them are read as the host sees them. Enabling copies the OpenXR layer and the profiles into the
+  sandbox's own folder, which its games can see; the copy is updated with the app and removed with the last game
+  there, and by the uninstaller. Those games share settings and stats with the app through a file in that folder,
+  since their /dev/shm is not the host's, and their logs are in Export logs. A running game is never edited, whether
+  its prefix is named as the host or the sandbox sees it.
 - Linux: the empty Games page no longer says "this Windows user", or that OpenXR games are foveated without being
   listed (on Linux they are enabled per game).
 - README: the status says 0.3; the OpenXR layer covers every game on Windows and goes per game on Linux; Monado and

@@ -69,43 +69,116 @@ pub fn open_url(url: &str) {
     }
 }
 
-/// Steam's install folders: the registry on Windows; on Linux the native and Debian/Ubuntu locations (the same
-/// library seen twice through symlinks is listed once). Flatpak and Snap Steam are left out: see `sandboxed_steam`.
-pub fn steam_roots() -> Vec<PathBuf> {
+/// Steam's install folders, each with the sandbox its Steam runs in: the registry on Windows; on Linux the native and
+/// Debian/Ubuntu locations, then Flatpak's and Snap's (a folder seen twice through symlinks is listed once).
+pub fn steam_roots() -> Vec<(PathBuf, Option<Sandbox>)> {
     #[cfg(windows)]
-    return fov_shm::sys::steam_path().map(PathBuf::from).into_iter().collect();
+    return fov_shm::sys::steam_path().map(|p| (PathBuf::from(p), None)).into_iter().collect();
     #[cfg(unix)]
     {
         let Some(home) = env_path("HOME") else { return vec![] };
-        let mut roots: Vec<PathBuf> = Vec::new();
-        for p in [".steam/steam", ".local/share/Steam"] {
-            if let Ok(real) = home.join(p).canonicalize()
+        let sandboxed =
+            Sandbox::ALL.iter().flat_map(|s| s.steam_rels().iter().map(move |r| format!("{}/{r}", s.home_rel())));
+        let mut roots: Vec<(PathBuf, Option<Sandbox>)> = Vec::new();
+        for p in [".steam/steam".to_owned(), ".local/share/Steam".to_owned()].into_iter().chain(sandboxed) {
+            if let Ok(real) = home.join(&p).canonicalize()
                 && real.join("steamapps").is_dir()
-                && !roots.contains(&real)
-                && !SANDBOXED_STEAM.iter().any(|s| real.starts_with(home.join(s)))
+                && !roots.iter().any(|(r, _)| *r == real)
             {
-                roots.push(real);
+                let sandbox = Sandbox::ALL.into_iter().find(|s| s.home().is_some_and(|h| real.starts_with(h)));
+                roots.push((real, sandbox));
             }
         }
         roots
     }
 }
 
-/// Where Flatpak and Snap keep Steam, under the home folder.
-#[cfg(unix)]
-const SANDBOXED_STEAM: [&str; 3] = [
-    ".var/app/com.valvesoftware.Steam/.local/share/Steam",
-    ".var/app/com.valvesoftware.Steam/data/Steam",
-    "snap/steam/common/.local/share/Steam",
-];
+/// Steam from Flatpak or Snap (Linux). Its sandbox sees a home folder of its own and a /dev/shm of its own, so
+/// FoveaXR's layer, logs and shared memory file for its games live in that home, which the host sees under the real
+/// one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sandbox {
+    Flatpak,
+    Snap,
+}
 
-/// Linux: Steam from Flatpak or Snap is installed. Not supported yet: its sandbox sees neither FoveaXR's files nor
-/// its shared memory, and its library list gives paths as the sandbox sees them.
-pub fn sandboxed_steam() -> bool {
-    #[cfg(windows)]
-    return false;
-    #[cfg(unix)]
-    return env_path("HOME").is_some_and(|h| SANDBOXED_STEAM.iter().any(|p| h.join(p).join("steamapps").is_dir()));
+impl Sandbox {
+    pub const ALL: [Self; 2] = [Self::Flatpak, Self::Snap];
+
+    /// Its home folder, under the real one. Flatpak Steam runs with `--persist=.`, so inside its sandbox this folder
+    /// is the home folder; Snap Steam sets $HOME to it.
+    const fn home_rel(self) -> &'static str {
+        match self {
+            Self::Flatpak => ".var/app/com.valvesoftware.Steam",
+            Self::Snap => "snap/steam/common",
+        }
+    }
+
+    /// Where its Steam keeps its files, under its home (older Flatpak builds used data/Steam).
+    const fn steam_rels(self) -> &'static [&'static str] {
+        match self {
+            Self::Flatpak => &[".local/share/Steam", "data/Steam"],
+            Self::Snap => &[".local/share/Steam"],
+        }
+    }
+
+    /// Its home folder as the host sees it. Linux only.
+    pub fn home(self) -> Option<PathBuf> {
+        let home = env_path("HOME").filter(|_| cfg!(unix))?.join(self.home_rel());
+        Some(home.canonicalize().unwrap_or(home))
+    }
+
+    /// Its Steam is installed.
+    pub fn installed(self) -> bool {
+        self.home().is_some_and(|h| self.steam_rels().iter().any(|r| h.join(r).join("steamapps").is_dir()))
+    }
+
+    /// FoveaXR's install folder in it, where the core inside looks (the XDG fallback under its home): the app copies
+    /// the OpenXR layer and the profiles there.
+    pub fn data_dir(self) -> Option<PathBuf> {
+        self.home().map(|h| h.join(".local/share/foveaxr"))
+    }
+
+    /// Where the core inside writes its logs.
+    pub fn state_dir(self) -> Option<PathBuf> {
+        self.home().map(|h| h.join(".local/state/foveaxr"))
+    }
+
+    /// The shared memory file the core inside maps (its /dev/shm is not the host's).
+    pub fn shm_file(self) -> Option<PathBuf> {
+        self.state_dir().map(|d| d.join("FoveaXR.v1"))
+    }
+
+    /// A path its Steam wrote down (a library), as the host sees it.
+    pub fn host_path(self, written: &Path) -> PathBuf {
+        match (self, env_path("HOME"), self.home()) {
+            (Self::Flatpak, Some(home), Some(sandbox)) => from_flatpak(written, &home, &sandbox, Path::exists),
+            _ => written.to_path_buf(),
+        }
+    }
+
+    /// A host path as its games see it, when they see it elsewhere (Flatpak: in its folder, under the home folder).
+    pub fn seen_inside(self, host: &Path) -> Option<PathBuf> {
+        match (self, env_path("HOME"), self.home()) {
+            (Self::Flatpak, Some(home), Some(sandbox)) => to_flatpak(host, &home, &sandbox),
+            _ => None,
+        }
+    }
+}
+
+/// A path Flatpak Steam wrote down, as the host sees it. It writes paths as its sandbox sees them, where its folder
+/// (`sandbox`) is the home folder: a path in the home folder lies in that folder, unless it is under ~/.var itself or
+/// not there (a folder the user shared with Flatpak Steam is the real one).
+fn from_flatpak(p: &Path, home: &Path, sandbox: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
+    match p.strip_prefix(home) {
+        Ok(rel) if !rel.starts_with(".var") && exists(&sandbox.join(rel)) => sandbox.join(rel),
+        _ => p.to_path_buf(),
+    }
+}
+
+/// The other way: a path in Flatpak Steam's folder as its sandbox sees it.
+fn to_flatpak(p: &Path, home: &Path, sandbox: &Path) -> Option<PathBuf> {
+    p.strip_prefix(sandbox).ok().map(|rel| home.join(rel))
 }
 
 /// Whether OpenXR games get our layer without a step per game. Windows: the layer is registered for this user (the
@@ -162,6 +235,28 @@ mod tests {
             wine_path(Path::new("/home/u/.local/share/foveaxr/fov_openxr_layer.json")),
             r"Z:\home\u\.local\share\foveaxr\fov_openxr_layer.json"
         );
+    }
+
+    #[test]
+    fn flatpak_paths() {
+        let (home, sandbox) = (Path::new("/home/u"), Path::new("/home/u/.var/app/com.valvesoftware.Steam"));
+        let there = |p: &Path| p.starts_with(sandbox.join(".local"));
+        // Its own library, as it wrote it down.
+        assert_eq!(
+            from_flatpak(Path::new("/home/u/.local/share/Steam"), home, sandbox, there),
+            sandbox.join(".local/share/Steam")
+        );
+        // Outside the home folder, or a home folder the user shared with it (nothing in its folder): as written.
+        assert_eq!(from_flatpak(Path::new("/mnt/games"), home, sandbox, there), Path::new("/mnt/games"));
+        assert_eq!(from_flatpak(Path::new("/home/u/Games"), home, sandbox, there), Path::new("/home/u/Games"));
+        let pfx = sandbox.join(".local/share/Steam/steamapps/compatdata/620/pfx");
+        assert_eq!(from_flatpak(&pfx, home, sandbox, |_| true), pfx);
+        // A prefix in its folder, as its games see it (WINEPREFIX); one outside is the same inside.
+        assert_eq!(
+            to_flatpak(&pfx, home, sandbox).as_deref(),
+            Some(Path::new("/home/u/.local/share/Steam/steamapps/compatdata/620/pfx"))
+        );
+        assert_eq!(to_flatpak(Path::new("/mnt/games/steamapps"), home, sandbox), None);
     }
 
     #[test]

@@ -48,9 +48,11 @@ std::string read_text(const std::wstring& path);
 std::wstring appdata_file(const wchar_t* name);
 
 // The app's folders: settings, logs, the install. Windows AppData, or the Linux XDG folders through Z: inside
-// Wine/Proton (the app runs natively there).
+// Wine/Proton (the app runs natively there). For Flatpak or Snap Steam, the same folders under the sandbox's home.
 enum class Host { Config, State, Install };
 std::wstring host_dir(Host kind);
+// Inside Wine/Proton under Flatpak or Snap Steam, whose sandbox has a home folder and /dev/shm of its own.
+bool in_sandbox();
 
 // Inline hook on a function (taken from a vtable); the detour reaches the original through *original.
 bool hook(void* target, void* detour, void** original);

@@ -5,6 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::platform::Sandbox;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Block {
     AntiCheat,
@@ -32,6 +34,8 @@ pub struct Game {
     pub dir: PathBuf,
     /// Added by hand (Add game), not found in a Steam library: it can be removed from the list.
     pub added: bool,
+    /// Listed by Flatpak or Snap Steam: its games load FoveaXR's files from the sandbox's own folder.
+    pub sandbox: Option<Sandbox>,
 }
 
 /// Exe names and app ids of a profile list (`exe = "..."`, `steam_app_id = N`).
@@ -87,13 +91,32 @@ fn kv(line: &str, key: &str) -> Option<String> {
     Some(v.replace("\\\\", "\\"))
 }
 
-fn libraries(root: &Path) -> Vec<PathBuf> {
+/// A Steam install's libraries, as the host sees them (a sandboxed Steam writes them as its sandbox sees them), each
+/// once.
+fn libraries(root: &Path, sandbox: Option<Sandbox>) -> Vec<PathBuf> {
     let text = std::fs::read_to_string(root.join("steamapps").join("libraryfolders.vdf")).unwrap_or_default();
-    let mut libs: Vec<PathBuf> = text.lines().filter_map(|l| kv(l, "path")).map(PathBuf::from).collect();
-    if libs.is_empty() {
-        libs.push(root.to_path_buf());
+    let mut written: Vec<PathBuf> = text.lines().filter_map(|l| kv(l, "path")).map(PathBuf::from).collect();
+    if written.is_empty() {
+        written.push(root.to_path_buf());
+    }
+    let mut libs: Vec<PathBuf> = Vec::new();
+    for lib in written {
+        let lib = sandbox.map_or_else(|| lib.clone(), |s| s.host_path(&lib));
+        let lib = lib.canonicalize().unwrap_or(lib);
+        if !libs.contains(&lib) {
+            libs.push(lib);
+        }
     }
     libs
+}
+
+/// The sandboxed Steam whose library holds this path (a game's DLL, a Proton prefix), if any.
+pub fn sandbox_of(path: &Path) -> Option<Sandbox> {
+    crate::platform::steam_roots()
+        .into_iter()
+        .filter_map(|(root, sandbox)| Some((root, sandbox?)))
+        .find(|(root, s)| libraries(root, Some(*s)).iter().any(|lib| path.starts_with(lib)))
+        .map(|(_, s)| s)
 }
 
 fn is_x64(dll: &Path) -> bool {
@@ -171,10 +194,7 @@ fn overlay_ids(manifest: &str) -> Vec<u32> {
 }
 
 pub enum Scan {
-    /// No Steam FoveaXR can use; `sandboxed` when Flatpak or Snap Steam is there (not supported yet).
-    NoSteam {
-        sandboxed: bool,
-    },
+    NoSteam,
     Games(Vec<Game>),
 }
 
@@ -210,6 +230,7 @@ pub fn folder(dir: &Path, profiles: &Profiles) -> Result<Game, String> {
         prefix: PathBuf::new(),
         dir: dir.to_path_buf(),
         added: true,
+        sandbox: None,
     };
     let game = classify(game, profiles).ok_or_else(|| {
         format!("No VR game in {}: FoveaXR looks for openvr_api.dll or openxr_loader.dll in it", dir.display())
@@ -228,23 +249,24 @@ pub fn scan(profiles: &Profiles, added: &[PathBuf]) -> Scan {
     const SKIP: [u32; 4] = [250_820, 228_980, 1_009_850, 1_173_510];
     let roots = crate::platform::steam_roots();
     if roots.is_empty() && added.is_empty() {
-        return Scan::NoSteam { sandboxed: crate::platform::sandboxed_steam() };
+        return Scan::NoSteam;
     }
     let overlays: Vec<u32> = roots
         .iter()
-        .flat_map(|r| {
+        .flat_map(|(r, _)| {
             overlay_ids(&std::fs::read_to_string(r.join("config").join("steamapps.vrmanifest")).unwrap_or_default())
         })
         .collect();
-    let mut libs: Vec<PathBuf> = Vec::new();
-    for lib in roots.iter().flat_map(|r| libraries(r)) {
-        let lib = lib.canonicalize().unwrap_or(lib);
-        if !libs.contains(&lib) {
-            libs.push(lib);
+    let mut libs: Vec<(PathBuf, Option<Sandbox>)> = Vec::new();
+    for (root, sandbox) in &roots {
+        for lib in libraries(root, *sandbox) {
+            if !libs.iter().any(|(l, _)| *l == lib) {
+                libs.push((lib, *sandbox));
+            }
         }
     }
     let mut games = Vec::new();
-    for lib in libs {
+    for (lib, sandbox) in libs {
         let apps = lib.join("steamapps");
         let Ok(entries) = std::fs::read_dir(&apps) else { continue };
         for e in entries.flatten() {
@@ -276,6 +298,7 @@ pub fn scan(profiles: &Profiles, added: &[PathBuf]) -> Scan {
                 prefix,
                 dir,
                 added: false,
+                sandbox,
             };
             games.extend(classify(game, profiles));
         }
@@ -319,6 +342,7 @@ mod tests {
             prefix: PathBuf::new(),
             dir: PathBuf::new(),
             added: false,
+            sandbox: None,
         };
         assert!(l.has(&game(438_100, "x.exe")));
         assert!(l.has(&game(1, "vrchat.exe")));
@@ -345,6 +369,7 @@ mod tests {
             prefix: PathBuf::new(),
             dir: PathBuf::new(),
             added: false,
+            sandbox: None,
         };
         inspect(&dir, &mut game);
         let _ = std::fs::remove_dir_all(&dir);

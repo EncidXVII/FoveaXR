@@ -15,6 +15,7 @@ use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::games::{self, Entry, Filter};
 use crate::openvr::{self, State};
+use crate::platform::Sandbox;
 use crate::settings::AppSettings;
 use crate::steam::{self, Scan};
 use crate::tray;
@@ -34,16 +35,74 @@ fn proxy_dll() -> PathBuf {
     shipped("openvr_proxy/openvr_api.dll")
 }
 
-/// The OpenXR layer manifest as Wine sees it, for Proton prefixes.
-pub fn layer_manifest() -> String {
-    crate::platform::wine_path(&shipped("fov_openxr_layer.json"))
+const LAYER_MANIFEST: &str = "fov_openxr_layer.json";
+
+/// The OpenXR layer manifest as Wine sees it, for Proton prefixes: the installed one, or for Flatpak or Snap Steam
+/// the copy in the sandbox's folder, as its games see that.
+pub fn layer_manifest(sandbox: Option<Sandbox>) -> String {
+    let Some((s, dir)) = sandbox.and_then(|s| Some((s, s.data_dir()?))) else {
+        return crate::platform::wine_path(&shipped(LAYER_MANIFEST));
+    };
+    let copy = dir.join(LAYER_MANIFEST);
+    crate::platform::wine_path(&s.seen_inside(&copy).unwrap_or(copy))
+}
+
+/// What a sandbox's copy of the layer holds: (source, path in the copy). The profiles go too: the core finds them
+/// in its install folder, which in a sandbox is the copy.
+fn layer_files() -> Vec<(PathBuf, PathBuf)> {
+    let mut files: Vec<(PathBuf, PathBuf)> =
+        [LAYER_MANIFEST, "fov_openxr_layer.dll"].into_iter().map(|f| (shipped(f), PathBuf::from(f))).collect();
+    let dir = app_dir();
+    let profiles = [dir.join("profiles"), dir.join("../../profiles")].into_iter().find(|d| d.is_dir());
+    for e in profiles.and_then(|d| std::fs::read_dir(d).ok()).into_iter().flatten().flatten() {
+        if e.path().extension().is_some_and(|x| x == "toml") {
+            files.push((e.path(), Path::new("profiles").join(e.file_name())));
+        }
+    }
+    files
+}
+
+/// The shared memory games see: /dev/shm (Windows: the named section), and a file in each sandboxed Steam's home,
+/// whose games have a /dev/shm of their own. A sandbox's file that can't be mapped leaves out only its games.
+fn mappings() -> Result<Vec<fov_shm::Mapping>, String> {
+    let mut maps = vec![fov_shm::Mapping::open()?];
+    for file in Sandbox::ALL.into_iter().filter(|s| s.installed()).filter_map(Sandbox::shm_file) {
+        let opened = file
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .map_err(|e| e.to_string())
+            .and_then(|()| fov_shm::Mapping::open_file(&file));
+        match opened {
+            Ok(m) => maps.push(m),
+            Err(e) => eprintln!("{}: {e}", file.display()),
+        }
+    }
+    Ok(maps)
+}
+
+/// Before a game of a sandboxed Steam is enabled: the sandbox's copy of the layer, so what the game is pointed at is
+/// there.
+fn copy_for(sandbox: Option<Sandbox>) -> Result<(), String> {
+    match sandbox.and_then(Sandbox::data_dir) {
+        Some(dir) => crate::proton::copy_into(&dir, &layer_files()),
+        None => Ok(()),
+    }
 }
 
 /// Logs, settings and installs as one zip on the desktop (tar writes zips on Windows and Linux), then shown.
 fn export_logs() -> Result<PathBuf, String> {
     let logs = crate::platform::state_dir().map(|d| d.join("logs")).filter(|d| d.exists());
     let settings = crate::platform::config_dir().filter(|d| d.exists());
-    if logs.is_none() && settings.is_none() {
+    // Games of Flatpak or Snap Steam log in the sandbox's home: kept under the sandbox's folder name.
+    let sandboxed: Vec<(PathBuf, PathBuf)> = Sandbox::ALL
+        .into_iter()
+        .filter_map(|s| {
+            let (home, logs) = (s.home()?, s.state_dir()?.join("logs"));
+            let base = home.parent()?;
+            logs.exists().then(|| Some((base.to_path_buf(), logs.strip_prefix(base).ok()?.to_path_buf())))?
+        })
+        .collect();
+    if logs.is_none() && settings.is_none() && sandboxed.is_empty() {
         return Err("no logs yet: start a VR game first".into());
     }
     // Windows' tar writes zips; GNU tar does not, so Linux gets a gzipped tar.
@@ -55,6 +114,9 @@ fn export_logs() -> Result<PathBuf, String> {
     cmd.arg(if cfg!(windows) { "-a" } else { "-z" }).arg("-c").arg("-f").arg(&out);
     if let Some(dir) = &logs {
         cmd.arg("-C").arg(dir.parent().unwrap_or(dir)).arg("logs");
+    }
+    for (base, rel) in &sandboxed {
+        cmd.arg("-C").arg(base).arg(rel);
     }
     if let Some(dir) = settings {
         cmd.arg("-C").arg(dir).arg(".");
@@ -127,10 +189,11 @@ enum Done {
 }
 
 struct App {
-    shm: fov_shm::Mapping,
+    /// Every shared memory games see (see `mappings`): settings go to each, stats come from each.
+    shm: Vec<fov_shm::Mapping>,
     settings: AppSettings,
     entries: Vec<Entry>,
-    /// 0 looking, 1 no Steam, 2 no VR games, 3 listed, 4 only Flatpak or Snap Steam.
+    /// 0 looking, 1 no Steam, 2 no VR games, 3 listed.
     state: i32,
     search: String,
     filter: Filter,
@@ -144,7 +207,7 @@ struct App {
 fn states(game: &steam::Game) -> (State, Option<State>) {
     let vr = openvr::state(&game.openvr, &openvr::load());
     let xr = (cfg!(unix) && game.openvr.is_empty())
-        .then(|| crate::proton::state(&game.prefix, &layer_manifest(), &crate::proton::load()));
+        .then(|| crate::proton::state(&game.prefix, &layer_manifest(game.sandbox), &crate::proton::load()));
     (vr, xr)
 }
 
@@ -195,8 +258,10 @@ fn toast(ui: &fov_ui::MainWindow, app: &mut App, text: String) {
 
 pub fn run() -> Result<(), String> {
     let settings = AppSettings::load();
-    let shm = fov_shm::Mapping::open()?;
-    shm.write_settings(&settings.to_shm());
+    let shm = mappings()?;
+    for m in &shm {
+        m.write_settings(&settings.to_shm());
+    }
     let ui = fov_ui::MainWindow::new().map_err(|e| e.to_string())?;
     ui.global::<fov_ui::Mode>().set_reduce_motion(!crate::platform::animations_enabled());
     ui.global::<fov_ui::Mode>().set_theme(i32::try_from(settings.theme).unwrap_or(0));
@@ -232,7 +297,9 @@ pub fn run() -> Result<(), String> {
             a.settings.preset = u32::try_from(ui.get_preset()).unwrap_or(fov_shm::preset::MEDIUM);
             a.settings.debug_tint = ui.get_tint();
             a.settings.theme = u32::try_from(ui.global::<fov_ui::Mode>().get_theme()).unwrap_or(0);
-            a.shm.write_settings(&a.settings.to_shm());
+            for m in &a.shm {
+                m.write_settings(&a.settings.to_shm());
+            }
             if let Err(e) = a.settings.save() {
                 toast(&ui, &mut a, format!("Settings not saved: {e}"));
             }
@@ -315,15 +382,19 @@ pub fn run() -> Result<(), String> {
             if let (true, Some(xr)) = (e.game.openvr.is_empty(), e.xr) {
                 // Linux OpenXR: the layer goes into the game's Proton prefix, off the UI thread.
                 e.busy = true;
-                let pfx = e.game.prefix.clone();
+                let (pfx, sandbox) = (e.game.prefix.clone(), e.game.sandbox);
                 let tx = tx.clone();
                 std::thread::spawn(move || {
+                    let manifest = layer_manifest(sandbox);
                     let result = if xr == State::On {
-                        crate::proton::disable(&pfx, &layer_manifest()).map(|()| format!("{name}: disabled"))
+                        crate::proton::disable(&pfx, &manifest).map(|()| format!("{name}: disabled"))
                     } else {
-                        crate::proton::enable(&pfx, &layer_manifest(), now())
+                        copy_for(sandbox)
+                            .and_then(|()| crate::proton::enable(&pfx, &manifest, now()))
                             .map(|()| format!("{name}: enabled. Start the game to use it"))
                     };
+                    // A sandbox's copy of the layer goes with its last game (or stays out after a failed enable).
+                    let _ = crate::proton::prune_copies();
                     let _ = tx.send(Done::Action { id, result: result.map_err(|e| format!("{name}: {e}")) });
                 });
             } else if e.game.openvr.is_empty() {
@@ -352,23 +423,26 @@ pub fn run() -> Result<(), String> {
                 e.busy = true;
                 let (dlls, on) = (e.game.openvr.clone(), e.vr == State::On);
                 let xr_pfx = (cfg!(unix) && e.game.openxr && !e.game.added).then(|| e.game.prefix.clone());
+                let sandbox = e.game.sandbox;
                 let tx = tx.clone();
                 std::thread::spawn(move || {
+                    let manifest = layer_manifest(sandbox);
                     let result = if on {
                         openvr::disable(&dlls)
-                            .and_then(|()| xr_pfx.map_or(Ok(()), |p| crate::proton::disable(&p, &layer_manifest())))
+                            .and_then(|()| xr_pfx.map_or(Ok(()), |p| crate::proton::disable(&p, &manifest)))
                             .map(|()| format!("{name}: disabled, its own openvr_api.dll is back"))
                     } else {
-                        openvr::enable(&dlls, &proxy_dll())
+                        // A sandbox's copy holds the profiles the proxy reads too.
+                        copy_for(sandbox)
+                            .and_then(|()| openvr::enable(&dlls, &proxy_dll()))
                             .and_then(|()| match xr_pfx {
                                 // No prefix yet (never started): the OpenVR part only, as before.
-                                Some(p) if p.join("user.reg").exists() => {
-                                    crate::proton::enable(&p, &layer_manifest(), now())
-                                }
+                                Some(p) if p.join("user.reg").exists() => crate::proton::enable(&p, &manifest, now()),
                                 _ => Ok(()),
                             })
                             .map(|()| format!("{name}: enabled. Start the game to use it"))
                     };
+                    let _ = crate::proton::prune_copies();
                     let _ = tx.send(Done::Action { id, result: result.map_err(|e| format!("{name}: {e}")) });
                 });
             }
@@ -424,6 +498,8 @@ pub fn run() -> Result<(), String> {
         move || {
             // An update of the app brings a new proxy: the games enabled before get it (those not running now).
             openvr::refresh(&proxy_dll());
+            // And the copies of the layer that games of Flatpak or Snap Steam load.
+            crate::proton::refresh_copies(&layer_files());
             let profiles = steam::Profiles::load(&app_dir());
             let _ = tx.send(Done::Scan(steam::scan(&profiles, &crate::settings::added())));
         }
@@ -456,7 +532,7 @@ pub fn run() -> Result<(), String> {
             let mut a = app.borrow_mut();
             while let Ok(done) = rx.try_recv() {
                 match done {
-                    Done::Scan(Scan::NoSteam { sandboxed }) => a.state = if sandboxed { 4 } else { 1 },
+                    Done::Scan(Scan::NoSteam) => a.state = 1,
                     Done::Scan(Scan::Games(found)) => {
                         a.state = if found.is_empty() { 2 } else { 3 };
                         let no_layer = a.no_layer;
@@ -522,8 +598,8 @@ pub fn run() -> Result<(), String> {
             let now = std::time::Instant::now();
             let slots: Vec<_> = a
                 .shm
-                .stats()
-                .into_iter()
+                .iter()
+                .flat_map(fov_shm::Mapping::stats)
                 .map(|(pid, s)| {
                     let beat = beats.entry((pid, s.exe())).or_insert((s.frames, now));
                     if beat.0 != s.frames {

@@ -71,8 +71,10 @@ replaces steps 1 and 2: the same files, kept in `~/.local/share/foveaxr` and run
 
 Uninstall: `~/.local/share/foveaxr/uninstall.sh` (every game and prefix put back, then the app removed).
 
-**Flatpak or Snap Steam:** not supported yet. Their sandbox can't see FoveaXR's files or its shared memory, so the
-app lists no games from them and says so. Use Steam from your distribution's packages.
+**Flatpak or Snap Steam:** supported (Experimental), and listed with the rest. Their sandbox can't see
+`~/.local/share/foveaxr` or the host's `/dev/shm`, so enabling a game copies the OpenXR layer and the profiles into
+the sandbox's own folder (`~/.var/app/com.valvesoftware.Steam` or `~/snap/steam/common`), where those games also
+keep their logs and the shared memory file. Disabling the last of its games, or uninstalling, removes the copy.
 
 **Monado or WiVRn instead of SteamVR:** Proton games reach these runtimes through xrizer or OpenComposite, set as the
 OpenVR runtime (your runtime's guide shows how). FoveaXR then works as above. Eye-tracked mode reaches OpenXR games

@@ -16,12 +16,14 @@ mod ui;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    // The uninstaller: every game's openvr_api.dll back as it was, and on Linux every Proton prefix's registry.
+    // The uninstaller: every game's openvr_api.dll back as it was, and on Linux every Proton prefix's registry, then
+    // the copies of the layer in Flatpak and Snap Steam's folders (kept for a game that could not be undone).
     if std::env::args().any(|a| a == "--uninstall") {
         // Both run, whatever the first one says.
         let openvr = openvr::disable_all();
-        let proton = if cfg!(unix) { proton::disable_all(&ui::layer_manifest()) } else { Ok(()) };
-        return match openvr.and(proton) {
+        let proton = if cfg!(unix) { proton::disable_all(&ui::layer_manifest(None)) } else { Ok(()) };
+        let copies = proton::prune_copies();
+        return match openvr.and(proton).and(copies) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");
