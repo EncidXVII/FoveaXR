@@ -193,6 +193,14 @@ pub fn enable(pfx: &Path, manifest: &str, now: u64) -> Result<(), String> {
         return Err("close the game first".into());
     }
     let mut records = load();
+    // Enabled already, and our value still there (Re-enable of a game that ships OpenVR too): the record and the
+    // backup of the original stay as they are, or the next Disable would put our value back with the "original".
+    let present = format!("{}=dword:00000000", quoted(manifest));
+    if records.iter().any(|r| r.reg == reg)
+        && String::from_utf8_lossy(&original).lines().any(|l| l.trim_end() == present)
+    {
+        return Ok(());
+    }
     records.retain(|r| r.reg != reg);
     let (text, created_key) = add_value(&String::from_utf8_lossy(&original), manifest, now);
     std::fs::write(pfx.join(BACKUP), &original).map_err(|e| e.to_string())?;
@@ -380,6 +388,11 @@ mod tests {
         let had_dir = crate::platform::config_dir().is_some_and(|d| d.exists());
         enable(&pfx, NAME, 1_732_000_000)?;
         assert_eq!(state(&pfx, NAME, &load()), State::On);
+        disable(&pfx, NAME)?;
+        assert_eq!(std::fs::read_to_string(pfx.join("user.reg")).ok().as_deref(), Some(REG));
+        // Enabled twice (Re-enable of a game that ships OpenVR too): Disable still gives back the original.
+        enable(&pfx, NAME, 1_732_000_000)?;
+        enable(&pfx, NAME, 1_732_000_001)?;
         disable(&pfx, NAME)?;
         assert_eq!(std::fs::read_to_string(pfx.join("user.reg")).ok().as_deref(), Some(REG));
         // Wine rewrote user.reg since: the value the record names is taken out, whatever the caller passes now.

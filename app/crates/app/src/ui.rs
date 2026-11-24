@@ -82,6 +82,13 @@ fn mappings() -> Result<Vec<fov_shm::Mapping>, String> {
 
 /// Before a game of a sandboxed Steam is enabled: the sandbox's copy of the layer, so what the game is pointed at is
 /// there.
+/// One game action at a time: they share the install records, and pruning a sandbox's copy of the layer must not
+/// run while another game is being enabled from it.
+fn action_lock() -> std::sync::MutexGuard<'static, ()> {
+    static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    ONE.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn copy_for(sandbox: Option<Sandbox>) -> Result<(), String> {
     match sandbox.and_then(Sandbox::data_dir) {
         Some(dir) => crate::proton::copy_into(&dir, &layer_files()),
@@ -385,6 +392,7 @@ pub fn run() -> Result<(), String> {
                 let (pfx, sandbox) = (e.game.prefix.clone(), e.game.sandbox);
                 let tx = tx.clone();
                 std::thread::spawn(move || {
+                    let _one = action_lock();
                     let manifest = layer_manifest(sandbox);
                     let result = if xr == State::On {
                         crate::proton::disable(&pfx, &manifest).map(|()| format!("{name}: disabled"))
@@ -426,20 +434,24 @@ pub fn run() -> Result<(), String> {
                 let sandbox = e.game.sandbox;
                 let tx = tx.clone();
                 std::thread::spawn(move || {
+                    let _one = action_lock();
                     let manifest = layer_manifest(sandbox);
+                    // The prefix first: it refuses while the game runs, before anything else has changed, so the
+                    // two parts are never left half on.
                     let result = if on {
-                        openvr::disable(&dlls)
-                            .and_then(|()| xr_pfx.map_or(Ok(()), |p| crate::proton::disable(&p, &manifest)))
+                        xr_pfx
+                            .map_or(Ok(()), |p| crate::proton::disable(&p, &manifest))
+                            .and_then(|()| openvr::disable(&dlls))
                             .map(|()| format!("{name}: disabled, its own openvr_api.dll is back"))
                     } else {
                         // A sandbox's copy holds the profiles the proxy reads too.
                         copy_for(sandbox)
-                            .and_then(|()| openvr::enable(&dlls, &proxy_dll()))
-                            .and_then(|()| match xr_pfx {
+                            .and_then(|()| match &xr_pfx {
                                 // No prefix yet (never started): the OpenVR part only, as before.
-                                Some(p) if p.join("user.reg").exists() => crate::proton::enable(&p, &manifest, now()),
+                                Some(p) if p.join("user.reg").exists() => crate::proton::enable(p, &manifest, now()),
                                 _ => Ok(()),
                             })
+                            .and_then(|()| openvr::enable(&dlls, &proxy_dll()))
                             .map(|()| format!("{name}: enabled. Start the game to use it"))
                     };
                     let _ = crate::proton::prune_copies();
