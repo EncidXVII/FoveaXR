@@ -55,6 +55,8 @@ pub struct Row {
     pub primary: bool,
     pub can_act: bool,
     pub busy: bool,
+    /// Added by hand and FoveaXR not in it: Remove from list is offered.
+    pub removable: bool,
 }
 
 /// Whether foveation will run in this game when it starts.
@@ -66,6 +68,9 @@ pub fn foveated(e: &Entry, s: &AppSettings) -> bool {
             (true, None) => !e.no_layer && !e.game.exes.iter().any(|x| s.off_games.contains(x)),
         }
 }
+
+/// What a game added by hand says first: FoveaXR knows nothing about it beyond its folder.
+const ADDED: &str = "Added by hand. Use FoveaXR only in single-player games: an online game can ban players for anything that changes it.";
 
 /// What every Linux row adds: vkd3d-proton turns D3D12 VRS into Vulkan's; dxvk-nvapi has no D3D11 VRS.
 const LINUX_D3D11: &str =
@@ -209,11 +214,16 @@ fn row(id: usize, e: &Entry, s: &AppSettings, now: u64) -> Row {
         api: format!("{api}{}", played(g.last_played, now)),
         badge: badge.into(),
         badge_kind: kind,
-        detail: if cfg!(unix) && g.block.is_none() { format!("{detail} {LINUX_D3D11}") } else { detail.into() },
+        detail: [g.added.then_some(ADDED), Some(detail), (cfg!(unix) && g.block.is_none()).then_some(LINUX_D3D11)]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" "),
         action: action.into(),
         primary,
         can_act,
         busy: e.busy,
+        removable: g.added && e.vr != State::On,
     }
 }
 
@@ -230,6 +240,7 @@ fn header(name: &str) -> Row {
         primary: false,
         can_act: false,
         busy: false,
+        removable: false,
     }
 }
 
@@ -295,6 +306,8 @@ mod tests {
                 exes: vec![format!("{}.exe", name.to_lowercase())],
                 block,
                 prefix: PathBuf::new(),
+                dir: PathBuf::new(),
+                added: false,
             },
             vr,
             xr: None,

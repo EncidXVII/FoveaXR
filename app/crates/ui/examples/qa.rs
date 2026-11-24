@@ -27,12 +27,16 @@ fn game(id: i32, name: &str, api: &str, badge: &str, kind: i32, action: &str) ->
         primary,
         can_act,
         busy: false,
+        removable: false,
     }
 }
 
 fn header(name: &str) -> GameRow {
     GameRow { id: -1, header: true, name: SharedString::from(name), ..game(-1, "", "", "", 1, "") }
 }
+
+/// The middle of the first row under a group header on the Games page (880x640).
+const ADDED_ROW_Y: f32 = 282.0;
 
 fn sample() -> Vec<GameRow> {
     let mut busy = game(3, "Tower Unite", "OpenVR · played yesterday", "Off", 1, "Enable");
@@ -103,6 +107,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     s.ui.set_search("zzz".into());
     s.ui.set_games(ModelRc::from(Rc::new(VecModel::<GameRow>::default())));
     save(&mut s, &out, "games_no_results")?;
+
+    // A game added by hand, its row open: the caution first, then Remove from list.
+    let mut s = window(880, 640)?;
+    s.ui.set_tab(1);
+    s.ui.set_games_state(3);
+    s.ui.set_games_note("1 game · 0 foveated".into());
+    let added = GameRow {
+        detail: "Added by hand. Use FoveaXR only in single-player games: an online game can ban players for anything \
+                 that changes it. OpenVR games need FoveaXR placed in their folder once. Close the game, then Enable."
+            .into(),
+        removable: true,
+        ..game(0, "Hand Added Game", "OpenVR", "Off", 1, "Enable")
+    };
+    s.ui.set_games(ModelRc::from(Rc::new(VecModel::from(vec![header("Other games"), added]))));
+    s.pointer(400.0, ADDED_ROW_Y, offscreen::Pointer::Down);
+    s.pointer(400.0, ADDED_ROW_Y, offscreen::Pointer::Up);
+    save(&mut s, &out, "games_added_open")?;
 
     let mut s = window(880, 640)?;
     s.ui.set_tab(1);

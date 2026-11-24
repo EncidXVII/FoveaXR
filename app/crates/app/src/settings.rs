@@ -40,6 +40,25 @@ fn path() -> Option<PathBuf> {
     dir().map(|d| d.join("settings.toml"))
 }
 
+/// Game folders added by hand (Add game), one per line in games.txt beside settings.toml.
+fn added_path() -> Option<PathBuf> {
+    dir().map(|d| d.join("games.txt"))
+}
+
+pub fn added() -> Vec<PathBuf> {
+    let text = added_path().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+    text.lines().map(str::trim).filter(|l| !l.is_empty()).map(PathBuf::from).collect()
+}
+
+pub fn set_added(dirs: &[PathBuf]) -> Result<(), String> {
+    let p = added_path().ok_or("no config folder")?;
+    if let Some(d) = p.parent() {
+        std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
+    }
+    let text: String = dirs.iter().map(|d| format!("{}\n", d.display())).collect();
+    std::fs::write(&p, text).map_err(|e| e.to_string())
+}
+
 fn unquote(v: &str) -> &str {
     v.trim().trim_matches('"')
 }

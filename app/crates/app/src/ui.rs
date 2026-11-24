@@ -123,6 +123,7 @@ enum Done {
     Scan(Scan),
     Action { id: usize, result: Result<String, String> },
     Export(Result<PathBuf, String>),
+    Added(Result<steam::Game, String>),
 }
 
 struct App {
@@ -167,6 +168,7 @@ fn show_rows(ui: &fov_ui::MainWindow, app: &App, rows: &VecModel<fov_ui::GameRow
             primary: r.primary,
             can_act: r.can_act,
             busy: r.busy,
+            removable: r.removable,
         })
         .collect();
     // Row by row, only what changed: replacing the whole model empties the list for a moment, and a list scrolled
@@ -360,13 +362,57 @@ pub fn run() -> Result<(), String> {
             show_rows(&ui, &a, &rows);
         }
     });
+    // Add game: a folder the Steam scan does not list. The folder is read off the UI thread.
+    ui.on_add_game({
+        let tx = tx.clone();
+        move || {
+            let Some(dir) =
+                rfd::FileDialog::new().set_title("Pick the folder of a VR game FoveaXR did not find").pick_folder()
+            else {
+                return;
+            };
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                let profiles = steam::Profiles::load(&app_dir());
+                let _ = tx.send(Done::Added(steam::folder(&dir, &profiles)));
+            });
+        }
+    });
+    // Remove from list: forgets a folder added by hand; the game itself is not touched.
+    ui.on_game_remove({
+        let (ui, app, rows) = (ui.as_weak(), Rc::clone(&app), Rc::clone(&rows));
+        move |id| {
+            let Some(ui) = ui.upgrade() else { return };
+            let Ok(id) = usize::try_from(id) else { return };
+            let mut a = app.borrow_mut();
+            // Rows are addressed by index: none may move while a game's files are being changed.
+            if a.entries.iter().any(|e| e.busy) {
+                return;
+            }
+            let Some(e) = a.entries.get(id).filter(|e| e.game.added && e.vr != State::On) else { return };
+            let (name, dir) = (e.game.name.clone(), e.game.dir.clone());
+            let kept: Vec<PathBuf> = crate::settings::added().into_iter().filter(|d| *d != dir).collect();
+            let msg = match crate::settings::set_added(&kept) {
+                Ok(()) => {
+                    a.entries.remove(id);
+                    if a.entries.is_empty() {
+                        a.state = 2;
+                    }
+                    format!("Removed {name} from the list")
+                }
+                Err(e) => format!("Not removed: {e}"),
+            };
+            toast(&ui, &mut a, msg);
+            show_rows(&ui, &a, &rows);
+        }
+    });
     std::thread::spawn({
         let tx = tx.clone();
         move || {
             // An update of the app brings a new proxy: the games enabled before get it (those not running now).
             openvr::refresh(&proxy_dll());
             let profiles = steam::Profiles::load(&app_dir());
-            let _ = tx.send(Done::Scan(steam::scan(&profiles)));
+            let _ = tx.send(Done::Scan(steam::scan(&profiles, &crate::settings::added())));
         }
     });
 
@@ -424,6 +470,29 @@ pub fn run() -> Result<(), String> {
                         });
                         toast(&ui, &mut a, msg);
                     }
+                    Done::Added(Ok(game)) => {
+                        let same =
+                            |d: &Path| d.canonicalize().ok().is_some_and(|d| game.dir.canonicalize().ok() == Some(d));
+                        let msg = if let Some(e) = a.entries.iter().find(|e| same(&e.game.dir)) {
+                            format!("{} is already in the list", e.game.name)
+                        } else {
+                            let mut dirs = crate::settings::added();
+                            dirs.push(game.dir.clone());
+                            match crate::settings::set_added(&dirs) {
+                                Ok(()) => {
+                                    let msg = format!("Added {}. Use FoveaXR only in single-player games", game.name);
+                                    let (vr, xr) = states(&game);
+                                    let no_layer = a.no_layer;
+                                    a.entries.push(Entry { game, vr, xr, no_layer, busy: false });
+                                    a.state = 3;
+                                    msg
+                                }
+                                Err(e) => format!("Not added: {e}"),
+                            }
+                        };
+                        toast(&ui, &mut a, msg);
+                    }
+                    Done::Added(Err(e)) => toast(&ui, &mut a, e),
                     Done::Export(result) => {
                         ui.set_exporting(false);
                         let msg = match result {

@@ -80,7 +80,7 @@ available**: Proton's NVAPI (dxvk-nvapi) has no D3D11 variable rate shading, and
   Medium, High), and the GPU time saved in the running game. Changes apply to running games at once. The card
   names the running game and says what is true of it: foveated or not (and why not), Fixed or eye-tracked, and
   whether eye tracking reaches that game at all.
-- **Games**: your Steam VR games with their status. Search, filter (Enabled, OpenVR, OpenXR, Blocked), sort by name
+- **Games**: your Steam VR games with their status, and any other VR game added by its folder with **Add game**. Search, filter (Enabled, OpenVR, OpenXR, Blocked), sort by name
   or last played; arrow keys move, Enter runs the row's action, Space opens its explanation, `/` searches.
 - **Settings**: accent theme, **debug tint** (colours the coarse rings: yellow half rate, red quarter rate), and
   **Export logs** (a zip on your desktop, for bug reports).

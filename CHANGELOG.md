@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 - 2026-11-24
+
+- **Add game** on the Games page: pick the folder of a VR game FoveaXR did not find, from another store or a copy
+  outside Steam. It is listed like the others, and its row says it was added by hand and that FoveaXR is for
+  single-player games only. **Remove from list** in its row takes it off again; the game itself is not touched.
+- On Linux, Add game takes OpenVR games: an OpenXR game outside Steam has no Proton prefix FoveaXR can find.
+
 ## 0.2.1 - 2026-11-23
 
 - About lists the maker's profiles as GitHub, X, Threads, with X at its new address (x.com/EncidXVII).

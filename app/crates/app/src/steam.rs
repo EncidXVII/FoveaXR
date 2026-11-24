@@ -28,6 +28,10 @@ pub struct Game {
     pub block: Option<Block>,
     /// The Proton prefix (steamapps/compatdata/<appid>/pfx); Linux only, it may not exist yet.
     pub prefix: PathBuf,
+    /// The game's folder.
+    pub dir: PathBuf,
+    /// Added by hand (Add game), not found in a Steam library: it can be removed from the list.
+    pub added: bool,
 }
 
 /// Exe names and app ids of a profile list (`exe = "..."`, `steam_app_id = N`).
@@ -171,12 +175,56 @@ pub enum Scan {
     Games(Vec<Game>),
 }
 
-/// Installed games with a VR runtime DLL, sorted by name. Slow (walks game folders): call off the UI thread.
-pub fn scan(profiles: &Profiles) -> Scan {
+/// Its blocks, from the lists and the folder; None when it ships no VR runtime DLL (a flat game, a tool).
+fn classify(mut game: Game, profiles: &Profiles) -> Option<Game> {
+    inspect(&game.dir.clone(), &mut game);
+    if game.openvr.is_empty() && !game.openxr {
+        return None;
+    }
+    game.block = if profiles.anticheat.has(&game) || has_anticheat(&game.dir) {
+        Some(Block::AntiCheat)
+    } else if profiles.native.has(&game) {
+        Some(Block::NativeFoveation)
+    } else {
+        None
+    };
+    Some(game)
+}
+
+/// A game folder picked with Add game: a VR game from another store, or a copy outside Steam. Slow (walks the
+/// folder): call off the UI thread.
+pub fn folder(dir: &Path, profiles: &Profiles) -> Result<Game, String> {
+    let name = dir.file_name().map_or_else(|| dir.display().to_string(), |n| n.to_string_lossy().into_owned());
+    let game = Game {
+        app_id: 0,
+        name,
+        last_played: 0,
+        openvr: vec![],
+        openxr: false,
+        vr_mod: false,
+        exes: vec![],
+        block: None,
+        prefix: PathBuf::new(),
+        dir: dir.to_path_buf(),
+        added: true,
+    };
+    let game = classify(game, profiles).ok_or_else(|| {
+        format!("No VR game in {}: FoveaXR looks for openvr_api.dll or openxr_loader.dll in it", dir.display())
+    })?;
+    // Linux: an OpenXR game's layer goes into its Proton prefix, which only Steam's own games have.
+    if cfg!(unix) && game.openvr.is_empty() {
+        return Err(format!("{} is an OpenXR game: outside Steam, FoveaXR can't find its Wine prefix", game.name));
+    }
+    Ok(game)
+}
+
+/// Installed games with a VR runtime DLL, and the folders added by hand, sorted by name. Slow (walks game folders):
+/// call off the UI thread.
+pub fn scan(profiles: &Profiles, added: &[PathBuf]) -> Scan {
     // Not games: SteamVR, Steamworks redistributables, and overlay tools that ship openvr_api.dll.
     const SKIP: [u32; 4] = [250_820, 228_980, 1_009_850, 1_173_510];
     let roots = crate::platform::steam_roots();
-    if roots.is_empty() {
+    if roots.is_empty() && added.is_empty() {
         return Scan::NoSteam;
     }
     let overlays: Vec<u32> = roots
@@ -213,7 +261,7 @@ pub fn scan(profiles: &Profiles) -> Scan {
             let dir = apps.join("common").join(install);
             let last_played = field("LastPlayed").and_then(|v| v.parse().ok()).unwrap_or(0);
             let prefix = apps.join("compatdata").join(id.as_str()).join("pfx");
-            let mut game = Game {
+            let game = Game {
                 app_id,
                 name,
                 last_played,
@@ -223,18 +271,18 @@ pub fn scan(profiles: &Profiles) -> Scan {
                 exes: vec![],
                 block: None,
                 prefix,
+                dir,
+                added: false,
             };
-            inspect(&dir, &mut game);
-            if game.openvr.is_empty() && !game.openxr {
-                continue;
-            }
-            game.block = if profiles.anticheat.has(&game) || has_anticheat(&dir) {
-                Some(Block::AntiCheat)
-            } else if profiles.native.has(&game) {
-                Some(Block::NativeFoveation)
-            } else {
-                None
-            };
+            games.extend(classify(game, profiles));
+        }
+    }
+    // A folder added by hand that Steam lists too is shown once, as Steam's.
+    let same = |a: &Path, b: &Path| a.canonicalize().ok().is_some_and(|a| b.canonicalize().ok() == Some(a));
+    for dir in added {
+        if !games.iter().any(|g| same(&g.dir, dir))
+            && let Ok(game) = folder(dir, profiles)
+        {
             games.push(game);
         }
     }
@@ -266,6 +314,8 @@ mod tests {
             exes: vec![exe.into()],
             block: None,
             prefix: PathBuf::new(),
+            dir: PathBuf::new(),
+            added: false,
         };
         assert!(l.has(&game(438_100, "x.exe")));
         assert!(l.has(&game(1, "vrchat.exe")));
@@ -290,6 +340,8 @@ mod tests {
             exes: vec![],
             block: None,
             prefix: PathBuf::new(),
+            dir: PathBuf::new(),
+            added: false,
         };
         inspect(&dir, &mut game);
         let _ = std::fs::remove_dir_all(&dir);

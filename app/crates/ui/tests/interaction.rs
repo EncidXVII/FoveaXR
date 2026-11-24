@@ -30,6 +30,7 @@ fn rows(n: i32) -> Vec<GameRow> {
             primary: false,
             can_act: true,
             busy: false,
+            removable: false,
         })
         .collect()
 }

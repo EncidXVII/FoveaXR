@@ -24,6 +24,8 @@ export struct GameRow {
     primary: bool,
     can-act: bool,
     busy: bool,
+    // Added by hand and FoveaXR not in it: its details offer Remove from list.
+    removable: bool,
 }
 
 component NavItem inherits Rectangle {
@@ -234,6 +236,7 @@ component GameLine inherits Rectangle {
     in property <bool> expanded;
     callback act();
     callback toggle();
+    callback remove();
     // Asks the list to scroll all of this row into view: when it becomes the selected one, and when it opens.
     callback reveal();
     changed selected => {
@@ -337,18 +340,34 @@ component GameLine inherits Rectangle {
             }
         }
     }
-    details := Caption {
+    details := VerticalLayout {
         y: root.compact;
         x: 36px + Tokens.space-5;
         width: parent.width - self.x - Tokens.space-3;
-        text: root.game.detail;
-        wrap: word-wrap;
-        vertical-alignment: top;
+        // Its own height: as tall as the row, it spread its parts over the row and Remove fell below the clip.
+        height: self.preferred-height;
+        spacing: Tokens.space-3;
+        padding-bottom: root.game.removable ? Tokens.space-3 : 0;
         visible: !root.game.header;
         opacity: root.expanded ? 1 : 0;
         animate opacity {
             duration: Motion.fade;
             easing: ease-out;
+        }
+        Caption {
+            text: root.game.detail;
+            wrap: word-wrap;
+            vertical-alignment: top;
+        }
+        // A game added by hand can be taken off the list again; the game itself is not touched.
+        if root.game.removable && root.expanded: HorizontalLayout {
+            alignment: start;
+            Button {
+                text: "Remove from list";
+                clicked => {
+                    root.remove();
+                }
+            }
         }
     }
 }
@@ -367,6 +386,9 @@ component GamesPage inherits FocusScope {
     callback filter-picked(int);
     callback sort-picked(int);
     callback act(int);
+    callback remove(int);
+    // Picks a game folder the Steam scan missed.
+    callback add-game();
     // The window's margins around this page: the wheel scrolls the list from there too.
     in property <length> margin-left;
     in property <length> margin-top;
@@ -561,6 +583,13 @@ component GamesPage inherits FocusScope {
                     root.sort-picked(root.sort == 0 ? 1 : 0);
                 }
             }
+            Button {
+                icon: Icons.add;
+                text: "Add game";
+                clicked => {
+                    root.add-game();
+                }
+            }
         }
         Segmented {
             label: "Show";
@@ -598,6 +627,11 @@ component GamesPage inherits FocusScope {
                         act => {
                             root.selected = i;
                             root.act(game.id);
+                        }
+                        remove => {
+                            root.selected = -1;
+                            root.expanded = -1;
+                            root.remove(game.id);
                         }
                     }
                 }
@@ -661,9 +695,19 @@ component GamesPage inherits FocusScope {
                 Caption {
                     horizontal-alignment: center;
                     wrap: word-wrap;
-                    text: root.state == 1 ? "Games from other stores still get foveated if they use OpenXR."
-                        : root.state == 2 ? "Install a VR game and reopen FoveaXR. OpenXR games are foveated without being listed."
+                    text: root.state == 1 ? "OpenXR games from other stores are foveated without being listed. For an OpenVR game, add its folder."
+                        : root.state == 2 ? "Install a VR game and reopen FoveaXR, or add a game's folder. OpenXR games are foveated without being listed."
                         : root.state == 3 ? "Try another filter or a shorter search." : "";
+                }
+                if root.state == 1 || root.state == 2: HorizontalLayout {
+                    alignment: center;
+                    Button {
+                        icon: Icons.add;
+                        text: "Add game";
+                        clicked => {
+                            root.add-game();
+                        }
+                    }
                 }
                 if root.state == 3 && (root.search != "" || root.filter != 0): HorizontalLayout {
                     alignment: center;
@@ -918,6 +962,8 @@ export component MainWindow inherits Window {
     callback filter-picked(int);
     callback sort-picked(int);
     callback game-action(int);
+    callback game-remove(int);
+    callback add-game();
 
     title: "FoveaXR";
     icon: @image-url("../../../../packaging/brand/foveaxr-256.png");
@@ -1053,6 +1099,12 @@ export component MainWindow inherits Window {
                         }
                         act(id) => {
                             root.game-action(id);
+                        }
+                        remove(id) => {
+                            root.game-remove(id);
+                        }
+                        add-game => {
+                            root.add-game();
                         }
                     }
                     if root.tab == 2: SettingsPage {
