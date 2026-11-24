@@ -171,7 +171,10 @@ fn overlay_ids(manifest: &str) -> Vec<u32> {
 }
 
 pub enum Scan {
-    NoSteam,
+    /// No Steam FoveaXR can use; `sandboxed` when Flatpak or Snap Steam is there (not supported yet).
+    NoSteam {
+        sandboxed: bool,
+    },
     Games(Vec<Game>),
 }
 
@@ -225,7 +228,7 @@ pub fn scan(profiles: &Profiles, added: &[PathBuf]) -> Scan {
     const SKIP: [u32; 4] = [250_820, 228_980, 1_009_850, 1_173_510];
     let roots = crate::platform::steam_roots();
     if roots.is_empty() && added.is_empty() {
-        return Scan::NoSteam;
+        return Scan::NoSteam { sandboxed: crate::platform::sandboxed_steam() };
     }
     let overlays: Vec<u32> = roots
         .iter()

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Linux: a game that ships both OpenVR and OpenXR gets our OpenXR layer in its Proton prefix too when enabled, so it
+  is foveated whichever of the two it renders through.
+- Linux: Flatpak and Snap Steam are no longer listed as if they worked. Their sandbox can't see FoveaXR's files; the
+  Games page now says they aren't supported yet.
+- Linux: the empty Games page no longer says "this Windows user", or that OpenXR games are foveated without being
+  listed (on Linux they are enabled per game).
+- README: the status says 0.3; the OpenXR layer covers every game on Windows and goes per game on Linux; Monado and
+  WiVRn setup (xrizer or OpenComposite).
+
 ## 0.3.0 - 2026-11-24
 
 - **Add game** on the Games page: pick the folder of a VR game FoveaXR did not find, from another store or a copy

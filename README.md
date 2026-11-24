@@ -15,7 +15,7 @@ foveation for every headset, eye-tracked (experimental) for Steam Frame and othe
 
 **[Download the latest release](https://github.com/EncidXVII/FoveaXR/releases/latest)** · [Guides and help on everyvr.net](https://everyvr.net/foveaxr) · [Discord](https://discord.gg/WkzGQwu2kz) · [Supported GPUs and games](#supported) · [Common questions](#common-questions) · [Limits](#limits)
 
-> **Status: early access (0.2), fixed foveation on Windows.** Eye-tracked mode and the Linux build are
+> **Status: early access (0.3), fixed foveation on Windows.** Eye-tracked mode and the Linux build are
 > experimental. Game reports (what a game saved, or that it saved nothing) are what it needs most:
 > see [Status and help wanted](#status-and-help-wanted).
 
@@ -39,7 +39,7 @@ Real games save less: how much depends on how much of their frame is pixel shadi
 | **Platforms** | Windows 10 and 11; Linux with Proton (experimental, Direct3D 12 games) |
 | **Safe to try** | Never runs in anti-cheat games; uninstall puts every game file back |
 | **Price** | Free. No account, no telemetry |
-| **Status** | Early access (0.2): fixed foveation on Windows; eye-tracked mode and Linux are experimental; game reports wanted |
+| **Status** | Early access (0.3): fixed foveation on Windows; eye-tracked mode and Linux are experimental; game reports wanted |
 | **License** | Open source, `GPL-3.0-or-later`, © 2026 EncidXVII |
 
 ## Install (Windows)
@@ -64,11 +64,19 @@ more testing.**
    StatusNotifier host: KDE has one, GNOME needs the AppIndicator extension; without it the window is the app.
 3. In the **Games** tab, **Enable** each game, with the game closed. OpenVR games get the `openvr_api.dll` swap as on
    Windows; OpenXR games get our layer registered in their own Proton prefix (start a game once first so it has one).
+   A game that ships both gets both.
 
 **NixOS or Nix:** `nix run github:EncidXVII/FoveaXR`, or `nix profile install github:EncidXVII/FoveaXR` to keep it,
 replaces steps 1 and 2: the same files, kept in `~/.local/share/foveaxr` and run from there.
 
 Uninstall: `~/.local/share/foveaxr/uninstall.sh` (every game and prefix put back, then the app removed).
+
+**Flatpak or Snap Steam:** not supported yet. Their sandbox can't see FoveaXR's files or its shared memory, so the
+app lists no games from them and says so. Use Steam from your distribution's packages.
+
+**Monado or WiVRn instead of SteamVR:** Proton games reach these runtimes through xrizer or OpenComposite, set as the
+OpenVR runtime (your runtime's guide shows how). FoveaXR then works as above. Eye-tracked mode reaches OpenXR games
+only there: OpenVR games get no eye data through xrizer, so they use Fixed.
 
 What is expected to work under Proton, from the translation layers' public source: **D3D12 games** (vkd3d-proton
 turns D3D12 VRS Tier 2 into Vulkan fragment shading rate; needs a Vulkan driver that has it). **D3D11 games are not
@@ -102,7 +110,8 @@ games through SteamVR's eye-tracked foveation centre (SteamVR 2.15+). Without ey
 | Linux / Proton: D3D12 | Expected (driver with fragment shading rate) | Expected | Expected |
 | Linux / Proton: D3D11 | No | No | No |
 
-VR APIs: OpenXR (API layer, all OpenXR games on any runtime) and OpenVR (per-game, after **Enable**).
+VR APIs: OpenXR (API layer: every OpenXR game on Windows; per game on Linux, after **Enable**) and OpenVR (per game,
+after **Enable**).
 
 ## Limits
 
@@ -119,7 +128,7 @@ VR APIs: OpenXR (API layer, all OpenXR games on any runtime) and OpenVR (per-gam
 
 ## Status and help wanted
 
-FoveaXR is in early access (0.2). Where each part stands, and what moves it forward:
+FoveaXR is in early access (0.3). Where each part stands, and what moves it forward:
 
 | Area | Where it stands | What helps |
 |---|---|---|

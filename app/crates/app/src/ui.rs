@@ -130,7 +130,7 @@ struct App {
     shm: fov_shm::Mapping,
     settings: AppSettings,
     entries: Vec<Entry>,
-    /// 0 looking, 1 no Steam, 2 no VR games, 3 listed.
+    /// 0 looking, 1 no Steam, 2 no VR games, 3 listed, 4 only Flatpak or Snap Steam.
     state: i32,
     search: String,
     filter: Filter,
@@ -205,6 +205,7 @@ pub fn run() -> Result<(), String> {
     ui.set_preset(i32::try_from(settings.preset).unwrap_or(1));
     ui.set_tint(settings.debug_tint);
     ui.set_version(env!("CARGO_PKG_VERSION").into());
+    ui.set_linux(cfg!(unix));
     let app = Rc::new(RefCell::new(App {
         shm,
         settings,
@@ -345,15 +346,27 @@ pub fn run() -> Result<(), String> {
                 };
                 toast(&ui, &mut a, msg);
             } else {
-                // OpenVR: files move in the game folder, off the UI thread.
+                // OpenVR: files move in the game folder, off the UI thread. On Linux a game that ships OpenXR too
+                // may render through it, so the layer goes into its Proton prefix with the proxy (Windows has one
+                // layer for every game).
                 e.busy = true;
                 let (dlls, on) = (e.game.openvr.clone(), e.vr == State::On);
+                let xr_pfx = (cfg!(unix) && e.game.openxr && !e.game.added).then(|| e.game.prefix.clone());
                 let tx = tx.clone();
                 std::thread::spawn(move || {
                     let result = if on {
-                        openvr::disable(&dlls).map(|()| format!("{name}: disabled, its own openvr_api.dll is back"))
+                        openvr::disable(&dlls)
+                            .and_then(|()| xr_pfx.map_or(Ok(()), |p| crate::proton::disable(&p, &layer_manifest())))
+                            .map(|()| format!("{name}: disabled, its own openvr_api.dll is back"))
                     } else {
                         openvr::enable(&dlls, &proxy_dll())
+                            .and_then(|()| match xr_pfx {
+                                // No prefix yet (never started): the OpenVR part only, as before.
+                                Some(p) if p.join("user.reg").exists() => {
+                                    crate::proton::enable(&p, &layer_manifest(), now())
+                                }
+                                _ => Ok(()),
+                            })
                             .map(|()| format!("{name}: enabled. Start the game to use it"))
                     };
                     let _ = tx.send(Done::Action { id, result: result.map_err(|e| format!("{name}: {e}")) });
@@ -443,7 +456,7 @@ pub fn run() -> Result<(), String> {
             let mut a = app.borrow_mut();
             while let Ok(done) = rx.try_recv() {
                 match done {
-                    Done::Scan(Scan::NoSteam) => a.state = 1,
+                    Done::Scan(Scan::NoSteam { sandboxed }) => a.state = if sandboxed { 4 } else { 1 },
                     Done::Scan(Scan::Games(found)) => {
                         a.state = if found.is_empty() { 2 } else { 3 };
                         let no_layer = a.no_layer;

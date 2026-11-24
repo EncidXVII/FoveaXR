@@ -69,8 +69,8 @@ pub fn open_url(url: &str) {
     }
 }
 
-/// Steam's install folders: the registry on Windows; on Linux the native, Debian/Ubuntu and Flatpak locations
-/// (the same library seen twice through symlinks is listed once).
+/// Steam's install folders: the registry on Windows; on Linux the native and Debian/Ubuntu locations (the same
+/// library seen twice through symlinks is listed once). Flatpak and Snap Steam are left out: see `sandboxed_steam`.
 pub fn steam_roots() -> Vec<PathBuf> {
     #[cfg(windows)]
     return fov_shm::sys::steam_path().map(PathBuf::from).into_iter().collect();
@@ -78,21 +78,34 @@ pub fn steam_roots() -> Vec<PathBuf> {
     {
         let Some(home) = env_path("HOME") else { return vec![] };
         let mut roots: Vec<PathBuf> = Vec::new();
-        for p in [
-            ".steam/steam",
-            ".local/share/Steam",
-            ".var/app/com.valvesoftware.Steam/.local/share/Steam",
-            ".var/app/com.valvesoftware.Steam/data/Steam",
-        ] {
+        for p in [".steam/steam", ".local/share/Steam"] {
             if let Ok(real) = home.join(p).canonicalize()
                 && real.join("steamapps").is_dir()
                 && !roots.contains(&real)
+                && !SANDBOXED_STEAM.iter().any(|s| real.starts_with(home.join(s)))
             {
                 roots.push(real);
             }
         }
         roots
     }
+}
+
+/// Where Flatpak and Snap keep Steam, under the home folder.
+#[cfg(unix)]
+const SANDBOXED_STEAM: [&str; 3] = [
+    ".var/app/com.valvesoftware.Steam/.local/share/Steam",
+    ".var/app/com.valvesoftware.Steam/data/Steam",
+    "snap/steam/common/.local/share/Steam",
+];
+
+/// Linux: Steam from Flatpak or Snap is installed. Not supported yet: its sandbox sees neither FoveaXR's files nor
+/// its shared memory, and its library list gives paths as the sandbox sees them.
+pub fn sandboxed_steam() -> bool {
+    #[cfg(windows)]
+    return false;
+    #[cfg(unix)]
+    return env_path("HOME").is_some_and(|h| SANDBOXED_STEAM.iter().any(|p| h.join(p).join("steamapps").is_dir()));
 }
 
 /// Whether OpenXR games get our layer without a step per game. Windows: the layer is registered for this user (the
