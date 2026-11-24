@@ -130,6 +130,17 @@ pub fn render(records: &[Install]) -> String {
         .join("\n")
 }
 
+/// Writes the whole file or nothing: a new file beside it, then renamed over it, so a full disk or a crash never
+/// leaves half a registry or half the records.
+fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".fov-tmp");
+    let tmp = PathBuf::from(tmp);
+    std::fs::write(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, path)).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })
+}
+
 pub fn load() -> Vec<Install> {
     records_path().and_then(|p| std::fs::read_to_string(p).ok()).map(|t| parse(&t)).unwrap_or_default()
 }
@@ -145,7 +156,7 @@ fn save(records: &[Install]) -> Result<(), String> {
     if let Some(d) = p.parent() {
         std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
     }
-    std::fs::write(p, render(records)).map_err(|e| e.to_string())
+    write_whole(&p, render(records).as_bytes()).map_err(|e| e.to_string())
 }
 
 /// The WINEPREFIX values a process of this prefix may have: its path, or the path its sandbox sees (`inside`), with
@@ -203,8 +214,8 @@ pub fn enable(pfx: &Path, manifest: &str, now: u64) -> Result<(), String> {
     }
     records.retain(|r| r.reg != reg);
     let (text, created_key) = add_value(&String::from_utf8_lossy(&original), manifest, now);
-    std::fs::write(pfx.join(BACKUP), &original).map_err(|e| e.to_string())?;
-    std::fs::write(&reg, text.as_bytes()).map_err(|e| e.to_string())?;
+    write_whole(&pfx.join(BACKUP), &original).map_err(|e| e.to_string())?;
+    write_whole(&reg, text.as_bytes()).map_err(|e| e.to_string())?;
     records.push(Install { reg, name: manifest.to_owned(), written: hash(text.as_bytes()), created_key });
     save(&records)
 }
@@ -232,7 +243,7 @@ fn restore(r: &Install, manifest: &str) -> Result<(), String> {
         }
         Ok(now) => {
             let text = remove_value(&String::from_utf8_lossy(&now), manifest, r.created_key);
-            std::fs::write(&r.reg, text).map_err(|e| e.to_string())?;
+            write_whole(&r.reg, text.as_bytes()).map_err(|e| e.to_string())?;
             let _ = std::fs::remove_file(&backup);
         }
         // The prefix is gone: nothing left to undo.
