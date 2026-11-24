@@ -7,6 +7,7 @@
 
 [![CI](https://github.com/EncidXVII/FoveaXR/actions/workflows/ci.yml/badge.svg)](https://github.com/EncidXVII/FoveaXR/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/EncidXVII/FoveaXR?include_prereleases&label=download)](https://github.com/EncidXVII/FoveaXR/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/EncidXVII/FoveaXR/total?label=downloads)](https://github.com/EncidXVII/FoveaXR/releases)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 **FoveaXR is a free, open-source tool that adds foveated rendering to the PC VR games you already own.** Fixed
