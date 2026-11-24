@@ -7,9 +7,10 @@ What search engines and assistants read first is the repository's own page, so i
 1. **Name**: `FoveaXR` (GitHub redirects the old address after a rename).
 2. **About**:
    - Description: `Free, open-source foveated rendering for any PC VR game: fixed for every headset, eye-tracked (experimental) for Steam Frame and other eye-tracking headsets. OpenXR layer and OpenVR, Direct3D 11 (NVIDIA) and Direct3D 12 (NVIDIA, AMD, Intel).`
-   - Topics (20 at most): `vr`, `virtual-reality`, `foveated-rendering`, `fixed-foveated-rendering`, `eye-tracking`,
-     `variable-rate-shading`, `vrs`, `openxr`, `openxr-api-layer`, `openvr`, `steamvr`, `vr-performance`,
-     `steam-frame`, `valve-index`, `meta-quest`, `directx-12`, `directx-11`, `nvidia`, `rust`, `cpp`.
+   - Topics (20 at most, most searched first; no competitor names): `vr`, `virtual-reality`, `pcvr`, `steamvr`,
+     `openvr`, `openxr`, `openxr-api-layer`, `foveated-rendering`, `fixed-foveated-rendering`, `eye-tracking`,
+     `variable-rate-shading`, `vrs`, `vr-performance`, `directx-12`, `directx-11`, `nvidia`, `amd`, `steam-frame`,
+     `meta-quest`, `valve-index`.
 3. **Settings > General > Social preview**: upload `docs/img/og.png` (the card shown when the link is shared).
 4. **Security**: turn on Private vulnerability reporting (`SECURITY.md` sends reports there) and Dependabot alerts.
 5. Features: Issues on, Discussions on (Q&A, Show and tell), Wiki off.
