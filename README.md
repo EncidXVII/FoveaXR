@@ -15,7 +15,7 @@ foveation for every headset, eye-tracked (experimental) for Steam Frame and othe
 
 **[Download the latest release](https://github.com/EncidXVII/FoveaXR/releases/latest)** · [Guides and help on everyvr.net](https://everyvr.net/foveaxr) · [Discord](https://discord.gg/WkzGQwu2kz) · [Supported GPUs and games](#supported) · [Common questions](#common-questions) · [Limits](#limits)
 
-> **Status: early access (0.3), fixed foveation on Windows.** Eye-tracked mode and the Linux build are
+> **Status: early access (0.4), fixed foveation on Windows.** Eye-tracked mode and the Linux build are
 > experimental. Game reports (what a game saved, or that it saved nothing) are what it needs most:
 > see [Status and help wanted](#status-and-help-wanted).
 
@@ -39,12 +39,12 @@ Real games save less: how much depends on how much of their frame is pixel shadi
 | **Platforms** | Windows 10 and 11; Linux with Proton (experimental, Direct3D 12 games) |
 | **Safe to try** | Never runs in anti-cheat games; uninstall puts every game file back |
 | **Price** | Free. No account, no telemetry |
-| **Status** | Early access (0.3): fixed foveation on Windows; eye-tracked mode and Linux are experimental; game reports wanted |
+| **Status** | Early access (0.4): fixed foveation on Windows; eye-tracked mode and Linux are experimental; game reports wanted |
 | **License** | Open source, `GPL-3.0-or-later`, © 2026 EncidXVII |
 
 ## Install (Windows)
 
-1. Download `FoveaXR-0.3.0.zip` from Releases, check it against `FoveaXR-0.3.0.zip.sha256`, unzip.
+1. Download `FoveaXR-0.4.0.zip` from Releases, check it against `FoveaXR-0.4.0.zip.sha256`, unzip.
 2. Run `Install.cmd`. No admin rights: it installs for your Windows user only and starts the app (tray icon).
 3. OpenXR games are foveated from their next start. OpenVR games: open the app's **Games** tab and press **Enable**.
 
@@ -59,7 +59,7 @@ OpenXR layer, settings and logs.
 For SteamVR on Linux with games running under Proton. **Experimental: requires
 more testing.**
 
-1. Download `FoveaXR-0.3.0-linux-x86_64.tar.gz`, check it against its `.sha256`, unpack.
+1. Download `FoveaXR-0.4.0-linux-x86_64.tar.gz`, check it against its `.sha256`, unpack.
 2. Run `./install.sh`: per user, no root (`~/.local/share/foveaxr`, a menu entry). The tray icon needs a
    StatusNotifier host: KDE has one, GNOME needs the AppIndicator extension; without it the window is the app.
 3. In the **Games** tab, **Enable** each game, with the game closed. OpenVR games get the `openvr_api.dll` swap as on
@@ -130,7 +130,7 @@ after **Enable**).
 
 ## Status and help wanted
 
-FoveaXR is in early access (0.3). Where each part stands, and what moves it forward:
+FoveaXR is in early access (0.4). Where each part stands, and what moves it forward:
 
 | Area | Where it stands | What helps |
 |---|---|---|

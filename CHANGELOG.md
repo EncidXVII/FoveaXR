@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-11-24
 
 - Linux: a game that ships both OpenVR and OpenXR gets our OpenXR layer in its Proton prefix too when enabled, so it
   is foveated whichever of the two it renders through.
@@ -12,7 +12,8 @@
   its prefix is named as the host or the sandbox sees it.
 - Linux: the empty Games page no longer says "this Windows user", or that OpenXR games are foveated without being
   listed (on Linux they are enabled per game).
-- README: the status says 0.3; the OpenXR layer covers every game on Windows and goes per game on Linux; Monado and
+- Nix: the installed copy is kept safe from garbage collection.
+- README: the status says 0.4; the OpenXR layer covers every game on Windows and goes per game on Linux; Monado and
   WiVRn setup (xrizer or OpenComposite).
 
 ## 0.3.0 - 2026-11-24
