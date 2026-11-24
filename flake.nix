@@ -14,7 +14,7 @@
   outputs =
     { self, nixpkgs }:
     let
-      version = "0.3.0";
+      version = "0.4.0";
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
       meta = {
@@ -33,7 +33,7 @@
         inherit version meta;
         src = pkgs.fetchurl {
           url = "https://github.com/EncidXVII/FoveaXR/releases/download/v${version}/FoveaXR-${version}-linux-x86_64.tar.gz";
-          hash = "sha256-rynIZSBkLNEfsw+yU+iXGZ9obSF0os6mmErEeBenvTc=";
+          hash = "sha256-JWcT0p28duSgtUcmfwf9FHENhXvKHp0soSB6tUyD13A=";
         };
         nativeBuildInputs = [ pkgs.autoPatchelfHook ];
         buildInputs = [
