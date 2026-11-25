@@ -120,8 +120,9 @@ after **Enable**).
 
 ## Limits
 
-- Never runs in games with anti-cheat (EasyAntiCheat, BattlEye, listed games). For games that foveate themselves,
-  press **Turn off** (OpenXR) or **Disable** (OpenVR) in the **Games** tab.
+- Never runs in games with anti-cheat (EasyAntiCheat, BattlEye, listed games), or in games that foveate themselves:
+  Half-Life: Alyx, Microsoft Flight Simulator 2024, iRacing, DCS World and Assetto Corsa EVO. For another game with its own foveation, press **Turn off** (OpenXR) or **Disable** (OpenVR) in the
+  **Games** tab.
   Online games: don't, even if not blocked.
 - Detection is by render-target size: games that render the scene at an unusual size, or deferred renderers whose
   lighting pass binds no depth, may get no savings. Games using temporal anti-aliasing can show shimmer at the ring
@@ -142,7 +143,7 @@ FoveaXR is in early access (0.4). Where each part stands, and what moves it forw
 | **Games that save nothing** | Detection goes by render-target size, so games that render at an unusual size, deferred renderers and some OpenVR Direct3D 12 games get no saving (see [Limits](#limits)) | The same report for those games: they are as useful as the good ones, and the logs show what to teach the detection |
 | **Eye-tracked foveation** | Supports OpenXR eye gaze and SteamVR's eye-tracked foveation centre; experimental, requires more testing | Reports from Steam Frame and other eye-tracking headsets |
 | **Linux (Proton)** | Experimental, requires more testing; Direct3D 12 games only | Reports with your distro, GPU, driver and the game |
-| **Game lists** | `profiles/` names the games with anti-cheat, so FoveaXR leaves them alone, and the games that foveate themselves (Half-Life: Alyx, MSFS 2024, iRacing, DCS World and Assetto Corsa EVO, from the next release). Such lists are never complete | An issue or pull request naming a game and its exe |
+| **Game lists** | `profiles/` names the games with anti-cheat, so FoveaXR leaves them alone, and the games that foveate themselves (Half-Life: Alyx, MSFS 2024, iRacing, DCS World and Assetto Corsa EVO). Such lists are never complete | An issue or pull request naming a game and its exe |
 | **Not built yet** | Vulkan and OpenGL games. Direct3D 11 on AMD and Intel cannot work: those drivers have no variable rate shading there | A report naming the Vulkan games you miss most |
 | **Code signing** | Builds are not signed yet: Windows may warn, and antivirus may flag `openvr_api.dll` in game folders | Nothing: every release has a SHA-256 checksum |
 
@@ -157,7 +158,7 @@ to where you look.
 
 **Does it work with my game?** OpenXR games work as soon as FoveaXR is installed. OpenVR (SteamVR) games need one
 **Enable** click each in the Games tab. The game must render with Direct3D 11 (NVIDIA only) or Direct3D 12. Games
-with anti-cheat are left alone; for games that already foveate themselves, switch FoveaXR off in the Games tab.
+with anti-cheat and the listed games that foveate themselves are left alone.
 
 **Which headsets work?** Fixed mode works on every PC VR headset: Valve Index, Meta Quest 2 / 3 / Pro over Link,
 Air Link, Virtual Desktop or Steam Link, HTC Vive, Pico, Bigscreen Beyond, Pimax, Windows Mixed Reality, Steam
@@ -226,7 +227,7 @@ Other ways to get foveated rendering in PC VR games, checked 25 November 2026:
 | [vrperfkit](https://github.com/fholger/vrperfkit) | Fixed | OpenVR and Oculus, Direct3D 11, a DLL per game | NVIDIA for VRS | No upstream release since 2022 |
 | [Quad-Views-Foveated](https://github.com/mbucchia/Quad-Views-Foveated) | Eye-tracked | OpenXR games that use quad views, such as DCS | Any | For a handful of games |
 
-Some games foveate themselves, such as Half-Life: Alyx, MSFS 2024, iRacing and DCS; switch FoveaXR off for those.
+Some games foveate themselves, such as Half-Life: Alyx, MSFS 2024, iRacing, DCS World and Assetto Corsa EVO; FoveaXR leaves those alone.
 Foveated streaming in Virtual Desktop, Steam Link and ALVR is a different thing: it saves Wi-Fi bandwidth, not GPU
 work, and works alongside FoveaXR.
 
