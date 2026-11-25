@@ -1,2 +1,39 @@
 # Games with their own foveated rendering (SPEC 8): we stand down so the game's version runs alone.
 # Same keys as blocklist_anticheat.toml, status = "native_foveation". Entries are added as titles are verified.
+# Matched by exe name or Steam app id: the app id covers Steam copies, the exe name copies started another way
+# (Microsoft Store, the game's own launcher). App ids checked against Steam's store API, 25 November 2026.
+
+[[game]]
+name = "Half-Life: Alyx"
+exe = "hlvr.exe"
+steam_app_id = 546560
+status = "native_foveation"
+notes = "Fixed and eye-tracked since the 26 October 2026 update; Options, Performance, Advanced Performance"
+
+[[game]]
+name = "Microsoft Flight Simulator 2024"
+exe = "FlightSimulator2024.exe"
+steam_app_id = 2537590
+status = "native_foveation"
+notes = "Quad views, fixed and eye-tracked, since Sim Update 2 (May 2025); VR graphics settings"
+
+[[game]]
+name = "iRacing"
+exe = "iRacingSim64DX11.exe"
+steam_app_id = 266410
+status = "native_foveation"
+notes = "Fixed since 2025 Season 3, eye-tracked since 2025 Season 4; OpenXR mode, VR mode Foveated"
+
+[[game]]
+name = "DCS World"
+exe = "DCS.exe"
+steam_app_id = 223750
+status = "native_foveation"
+notes = "Quad views (Use Quad Views in the launcher), with Quad-Views-Foveated on most headsets"
+
+[[game]]
+name = "Assetto Corsa EVO"
+exe = "AssettoCorsaEVO.exe"
+steam_app_id = 3058630
+status = "native_foveation"
+notes = "Fixed and eye-tracked since update 0.8 (9 July 2026); VR settings"

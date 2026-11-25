@@ -359,6 +359,20 @@ mod tests {
         assert!(l.has(&game(438_100, "x.exe")));
         assert!(l.has(&game(1, "vrchat.exe")));
         assert!(!l.has(&game(1, "other.exe")));
+
+        // The shipped list of games that foveate themselves: each found by app id (a Steam copy) and by exe name.
+        let native = List::parse(include_str!("../../../../profiles/native_foveation.toml"));
+        for (id, exe) in [
+            (546_560, "hlvr.exe"),
+            (2_537_590, "flightsimulator2024.exe"),
+            (266_410, "iracingsim64dx11.exe"),
+            (223_750, "dcs.exe"),
+            (3_058_630, "assettocorsaevo.exe"),
+        ] {
+            assert!(native.has(&game(id, "x.exe")), "{id}");
+            assert!(native.has(&game(1, exe)), "{exe}");
+        }
+        assert!(!native.has(&game(438_100, "vrchat.exe")));
     }
 
     fn inspected(files: &[&str]) -> Game {

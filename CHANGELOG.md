@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The list of games that foveate themselves names its first five: Half-Life: Alyx, Microsoft Flight Simulator 2024,
+  iRacing, DCS World and Assetto Corsa EVO. FoveaXR stands down in them, by Steam app id or exe name, so the game's
+  own foveated rendering runs alone, and the Games tab marks them Built in.
+
 ## 0.4.1 - 2026-11-24
 
 - Linux: a game added by hand that Flatpak or Snap Steam runs (as a non-Steam game) gets the copy of FoveaXR's files

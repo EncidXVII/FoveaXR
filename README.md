@@ -142,7 +142,7 @@ FoveaXR is in early access (0.4). Where each part stands, and what moves it forw
 | **Games that save nothing** | Detection goes by render-target size, so games that render at an unusual size, deferred renderers and some OpenVR Direct3D 12 games get no saving (see [Limits](#limits)) | The same report for those games: they are as useful as the good ones, and the logs show what to teach the detection |
 | **Eye-tracked foveation** | Supports OpenXR eye gaze and SteamVR's eye-tracked foveation centre; experimental, requires more testing | Reports from Steam Frame and other eye-tracking headsets |
 | **Linux (Proton)** | Experimental, requires more testing; Direct3D 12 games only | Reports with your distro, GPU, driver and the game |
-| **Game lists** | `profiles/` names the games with anti-cheat, so FoveaXR leaves them alone, and will name games that foveate themselves once each is verified (none yet). Such lists are never complete | An issue or pull request naming a game and its exe |
+| **Game lists** | `profiles/` names the games with anti-cheat, so FoveaXR leaves them alone, and the games that foveate themselves (Half-Life: Alyx, MSFS 2024, iRacing, DCS World and Assetto Corsa EVO, from the next release). Such lists are never complete | An issue or pull request naming a game and its exe |
 | **Not built yet** | Vulkan and OpenGL games. Direct3D 11 on AMD and Intel cannot work: those drivers have no variable rate shading there | A report naming the Vulkan games you miss most |
 | **Code signing** | Builds are not signed yet: Windows may warn, and antivirus may flag `openvr_api.dll` in game folders | Nothing: every release has a SHA-256 checksum |
 
