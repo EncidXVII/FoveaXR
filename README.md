@@ -212,6 +212,23 @@ Release zip: `installer\package.ps1`. Tests: `ctest --test-dir build -C Release`
 | `profiles/` | Anti-cheat and native-foveation lists |
 | `installer/` | Install, uninstall, packaging |
 
+## How it compares
+
+Other ways to get foveated rendering in PC VR games, checked 25 November 2026:
+
+| Tool | Fixed or eye-tracked | Games | GPUs | State |
+|---|---|---|---|---|
+| **FoveaXR** | Both (eye-tracked is experimental) | OpenXR and OpenVR, Direct3D 11 and 12 | NVIDIA RTX 20+, AMD RX 6000+, Intel Arc (Direct3D 12) | Early access, GPL-3.0 |
+| [PimaxMagic4All](https://github.com/mbucchia/PimaxMagic4All) | Both | OpenVR, Direct3D 11 | NVIDIA GTX 16 / RTX 20 and newer | Active; needs Pimax's LibMagic from Pimax Play |
+| [DesktopXR](https://github.com/glenimp617/DesktopXR) | Both | OpenXR, Direct3D 11 and 12, with a profile per game | NVIDIA | Active, closed binary |
+| [OpenXR Toolkit](https://github.com/mbucchia/OpenXR-Toolkit/blob/gh-pages/index.md) | Both | OpenXR | NVIDIA; AMD and Intel on Direct3D 12 | Discontinued in 2024 |
+| [vrperfkit](https://github.com/fholger/vrperfkit) | Fixed | OpenVR and Oculus, Direct3D 11, a DLL per game | NVIDIA for VRS | No upstream release since 2022 |
+| [Quad-Views-Foveated](https://github.com/mbucchia/Quad-Views-Foveated) | Eye-tracked | OpenXR games that use quad views, such as DCS | Any | For a handful of games |
+
+Some games foveate themselves, such as Half-Life: Alyx, MSFS 2024, iRacing and DCS; FoveaXR leaves those alone.
+Foveated streaming in Virtual Desktop, Steam Link and ALVR is a different thing: it saves Wi-Fi bandwidth, not GPU
+work, and works alongside FoveaXR.
+
 ## More PC VR tools from the same author
 
 Four free, open-source tools for PC VR by [EncidXVII](https://github.com/EncidXVII), with one look and one way of working. Guides, downloads and news for all four: [everyvr.net](https://everyvr.net).
