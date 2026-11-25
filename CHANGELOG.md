@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.2 - 2026-11-25
 
 - The list of games that foveate themselves names its first five: Half-Life: Alyx, Microsoft Flight Simulator 2024,
   iRacing, DCS World and Assetto Corsa EVO. FoveaXR stands down in them, by Steam app id or exe name, so the game's
