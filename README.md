@@ -72,7 +72,9 @@ replaces steps 1 and 2: the same files, kept in `~/.local/share/foveaxr` and run
 
 Uninstall: `~/.local/share/foveaxr/uninstall.sh` (every game and prefix put back, then the app removed).
 
-**Flatpak or Snap Steam:** supported (Experimental), and listed with the rest. Their sandbox can't see
+**Flatpak or Snap Steam:** supported (Experimental), and listed with the rest, for games on Monado or WiVRn. SteamVR
+itself does not run properly from those packages, [Valve says](https://help.steampowered.com/faqs/view/18A4-1E10-8A94-3DDA), so for SteamVR use Steam from your
+distribution. Their sandbox can't see
 `~/.local/share/foveaxr` or the host's `/dev/shm`, so enabling a game copies the OpenXR layer and the profiles into
 the sandbox's own folder (`~/.var/app/com.valvesoftware.Steam` or `~/snap/steam/common`), where those games also
 keep their logs and the shared memory file. Disabling the last of its games, or uninstalling, removes the copy.
@@ -110,7 +112,7 @@ games through SteamVR's eye-tracked foveation centre (SteamVR 2.15+). Without ey
 | D3D11 | Yes | No | No |
 | D3D12 | Yes | Yes | Yes |
 | Vulkan, OpenGL | No | No | No |
-| Linux / Proton: D3D12 | Expected (driver with fragment shading rate) | Expected | Expected |
+| Linux / Proton: D3D12 | Experimental (driver with fragment shading rate) | Experimental | Experimental |
 | Linux / Proton: D3D11 | No | No | No |
 
 VR APIs: OpenXR (API layer: every OpenXR game on Windows; per game on Linux, after **Enable**) and OpenVR (per game,
