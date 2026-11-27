@@ -234,7 +234,9 @@ int frame_slot() {  // g_time_m held
 
 struct ListState {
     bool checked = false, direct = false;
-    ComPtr<ID3D12GraphicsCommandList5> l5;
+    // Not owned: a reference kept here would keep every list the game lets go of alive for good. It is only used
+    // inside a call the game makes on the list, when the list is alive.
+    ID3D12GraphicsCommandList5* l5 = nullptr;
     ID3D12Resource* bound = nullptr;
     int span_slot = -1;
     UINT span = 0;
@@ -249,7 +251,8 @@ ListState& state(List* list) {
     if (!s.checked) {
         s.checked = true;
         s.direct = list->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT;
-        if (s.direct) list->QueryInterface(IID_PPV_ARGS(&s.l5));
+        ComPtr<ID3D12GraphicsCommandList5> l5;
+        if (s.direct && SUCCEEDED(list->QueryInterface(IID_PPV_ARGS(&l5)))) s.l5 = l5.Get();
     }
     return s;
 }
@@ -328,8 +331,9 @@ HRESULT STDMETHODCALLTYPE close(List* list) {
 HRESULT STDMETHODCALLTYPE reset(List* list, ID3D12CommandAllocator* alloc, ID3D12PipelineState* pso) {
     HRESULT hr = g_reset(list, alloc, pso);
     if (!t_inside) {
-        ListState& s = state(list);
-        s.bound = nullptr, s.span_slot = -1;
+        // Start over: a new list can sit at the address of one the game freed, so what was known is read again.
+        std::lock_guard lock(g_lists_m);
+        g_lists.erase(list);
     }
     return hr;
 }

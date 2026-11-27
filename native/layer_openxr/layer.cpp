@@ -178,8 +178,10 @@ void begin_frame() {
     if (!s.view || !s.display) return;
     // An app without action sets (no controllers) never attaches or syncs any: ours goes alone. Never when it has
     // some: a session takes one attach, and ours going first would make the app's own fail, and a sync of ours
-    // alone would switch the app's sets off.
-    if (s.gaze_supported && !s.attached && !s.app_sets && s.frames > kAttachAloneAfter) {
+    // alone would switch the app's sets off. Only in eye-tracked mode: a game that makes its sets late (after a
+    // long loading screen) loses its controls for the session to this attach, and in the other modes the gaze is
+    // not used.
+    if (s.gaze_supported && !s.attached && !s.app_sets && s.frames > kAttachAloneAfter && fov::Core::get().eye_mode()) {
         XrSessionActionSetsAttachInfo ai = {XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};
         ai.countActionSets = 1;
         ai.actionSets = &s.set;

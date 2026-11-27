@@ -189,7 +189,13 @@ fn inspect(dir: &Path, game: &mut Game) {
                 } else {
                     own = true;
                 }
-            } else if depth <= 1 && name.ends_with(".exe") && !name.contains("crash") && !name.starts_with("unins") {
+            // An Unreal game runs as <Project>\Binaries\Win64\<Project>-Win64-Shipping.exe, deeper than the others:
+            // without it, Turn off and the lists would name only the small launcher at the top.
+            } else if (depth <= 1 || name.ends_with("-shipping.exe"))
+                && name.ends_with(".exe")
+                && !name.contains("crash")
+                && !name.starts_with("unins")
+            {
                 game.exes.push(name);
             }
         }

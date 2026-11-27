@@ -105,6 +105,8 @@ public:
     Bind classify(const void* resource, uint32_t w, uint32_t h, uint32_t depth_w, uint32_t depth_h);
 
     bool foveating() const;
+    // Eye-tracked is the mode chosen (the setting, or Ctrl+F10): only then is an eye tracker worth asking for.
+    bool eye_mode() const;
     uint64_t pattern_version() const;
     void pattern(Target t, uint32_t w, uint32_t h, uint32_t tile, std::vector<uint8_t>& out) const;
     // Debug tint: per eye focus (2), the angles in degrees from which it is yellow and red (2), fov (4).

@@ -56,7 +56,7 @@ struct Core::State {
     FovSettings settings = {};
     Rings rings = {};
     bool tracked = false;
-    std::atomic<bool> fove{false}, tint{false}, disabled{false};
+    std::atomic<bool> fove{false}, tint{false}, disabled{false}, eye_mode{false};
     std::atomic<uint64_t> frame{0}, version{1}, binds{0}, skips{0}, uncertain{0}, passes{0};
     std::atomic<uint32_t> eye_w{0}, eye_h{0}, layout{FOV_LAYOUT_UNKNOWN};
     std::shared_mutex eyes_m;
@@ -192,6 +192,7 @@ void Core::begin_frame(const Fov fov[2], const float (*gaze_uv)[2], FovGazeSourc
     }
     s_->f9 = f9, s_->f10 = f10;
     uint32_t mode = s_->mode_override >= 0 ? (uint32_t)s_->mode_override : set.mode;
+    s_->eye_mode = mode == FOV_MODE_EYE;
 
     Rings r = {};
     bool tracked = mode == FOV_MODE_EYE && have_gaze;
@@ -293,6 +294,7 @@ Core::Bind Core::classify(const void* resource, uint32_t w, uint32_t h, uint32_t
 }
 
 bool Core::foveating() const { return s_ && s_->fove; }
+bool Core::eye_mode() const { return s_ && s_->eye_mode; }
 uint64_t Core::pattern_version() const { return s_->version; }
 
 void Core::pattern(Target t, uint32_t w, uint32_t h, uint32_t tile, std::vector<uint8_t>& out) const {
