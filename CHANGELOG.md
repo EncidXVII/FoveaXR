@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.3 - 2026-11-28
+
+- Direct3D 12: FoveaXR no longer keeps the game's command lists alive. A game that makes new ones as it runs lost
+  memory for as long as it ran.
+- **Turn off** now reaches Unreal Engine games on OpenXR. The app listed only the small launcher at the top of the
+  game's folder, not the `-Shipping.exe` the game runs as, so the game stayed foveated.
+- OpenXR: FoveaXR's own eye-gaze action set is attached by itself only in eye-tracked mode. In the other modes a
+  game that sets up its controls late (after a long loading screen) could lose them for the session.
+
 ## 0.4.2 - 2026-11-25
 
 - The list of games that foveate themselves names its first five: Half-Life: Alyx, Microsoft Flight Simulator 2024,

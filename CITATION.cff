@@ -5,8 +5,8 @@ title: "FoveaXR: foveated rendering for any PC VR game"
 abstract: "Free, open-source foveated rendering for PC VR games: an OpenXR API layer and an OpenVR proxy that apply variable rate shading (Direct3D 12 VRS Tier 2, Direct3D 11 through NVAPI) to a game's eye passes, fixed or following eye tracking, with a tray app that enables it per game and measures the GPU time saved."
 authors:
   - alias: EncidXVII
-version: 0.4.2
-date-released: 2026-11-25
+version: 0.4.3
+date-released: 2026-11-28
 license: GPL-3.0-or-later
 repository-code: "https://github.com/EncidXVII/FoveaXR"
 url: "https://everyvr.net/foveaxr"
